@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 defaults:
   run:
@@ -147,26 +148,7 @@ jobs:
           target: default
           arch: x86_64
           disable-animations: true
-          script: |
-            adb wait-for-device
-            adb install -r Game.apk || { echo "::error::adb install failed"; exit 1; }
-            adb shell am start -W -n com.derka.gd/android.app.NativeActivity || true
-            sleep 20
-            PID=$(adb shell pidof com.derka.gd || true)
-            adb logcat -d > logcat.txt || true
-            { echo "pid=${PID:-DEAD}";
-              grep -aE 'FATAL EXCEPTION|Fatal signal|gdderka|AndroidRuntime|UnsatisfiedLink|dlopen' logcat.txt | head -8;
-              if [ -z "$PID" ]; then
-                grep -a -A12 'Fatal signal' logcat.txt | head -26;
-                grep -a -A14 'FATAL EXCEPTION' logcat.txt | head -26;
-              fi; } > smoke.txt
-            if [ -z "$PID" ]; then
-              head -30 smoke.txt | while IFS= read -r l; do echo "::error::SMOKE: $l"; done
-              exit 1
-            fi
-            head -10 smoke.txt | while IFS= read -r l; do echo "::notice::SMOKE: $l"; done
-            adb shell am force-stop com.derka.gd
-
+          script: bash tools/smoke.sh
       - name: Delete temporary signing key
         if: ${{ always() }}
         run: rm -rf -- "${RUNNER_TEMP:?}/derka-signing"
