@@ -27,7 +27,7 @@ typedef struct {
   EGLSurface surf;
   EGLContext ctx;
   GLuint prog, vbo;
-  int ready, anim, W, H;
+  int ready, anim, W, H, logged;
   double last;
   GDGame g;
 } Eng;
@@ -325,6 +325,8 @@ static GLuint shader(GLenum type, const char *src)
   return s;
 }
 
+static void e_term(Eng *e);
+
 static int e_init(Eng *e)
 {
   EGLint cfgattr[] = {
@@ -340,13 +342,22 @@ static int e_init(Eng *e)
   GLuint vs, fs;
 
   e->dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-  if (e->dpy == EGL_NO_DISPLAY || !eglInitialize(e->dpy, NULL, NULL)) return 0;
-  if (!eglChooseConfig(e->dpy, cfgattr, &cfg, 1, &n) || n < 1) return 0;
+  if (e->dpy == EGL_NO_DISPLAY || !eglInitialize(e->dpy, NULL, NULL)) {
+    LOGI("eglInitialize failed, err=0x%x", eglGetError()); e_term(e); return 0;
+  }
+  if (!eglChooseConfig(e->dpy, cfgattr, &cfg, 1, &n) || n < 1) {
+    LOGI("eglChooseConfig failed, err=0x%x", eglGetError()); e_term(e); return 0;
+  }
 
   e->surf = eglCreateWindowSurface(e->dpy, cfg, e->app->window, NULL);
   e->ctx = eglCreateContext(e->dpy, cfg, EGL_NO_CONTEXT, ctxattr);
-  if (e->surf == EGL_NO_SURFACE || e->ctx == EGL_NO_CONTEXT) return 0;
-  if (!eglMakeCurrent(e->dpy, e->surf, e->surf, e->ctx)) return 0;
+  if (e->surf == EGL_NO_SURFACE || e->ctx == EGL_NO_CONTEXT) {
+    LOGI("eglCreateWindowSurface/Context failed, err=0x%x", eglGetError());
+    e_term(e); return 0;
+  }
+  if (!eglMakeCurrent(e->dpy, e->surf, e->surf, e->ctx)) {
+    LOGI("eglMakeCurrent failed, err=0x%x", eglGetError()); e_term(e); return 0;
+  }
 
   eglQuerySurface(e->dpy, e->surf, EGL_WIDTH, &w);
   eglQuerySurface(e->dpy, e->surf, EGL_HEIGHT, &h);
@@ -365,7 +376,7 @@ static int e_init(Eng *e)
   glGetProgramiv(e->prog, GL_LINK_STATUS, &linked);
   glDeleteShader(vs);
   glDeleteShader(fs);
-  if (!linked) { LOGI("link failed"); return 0; }
+  if (!linked) { LOGI("shader link failed"); e_term(e); return 0; }
 
   glUseProgram(e->prog);
   glGenBuffers(1, &e->vbo);
@@ -408,6 +419,7 @@ static void frame(Eng *e)
   e->last = now;
 
   render(e);
+  if (!e->logged) { e->logged = 1; LOGI("first frame: %d verts", vn); }
   glClearColor(0, 0, 0, 1);
   glClear(GL_COLOR_BUFFER_BIT);
   glBufferData(GL_ARRAY_BUFFER, vn * (GLsizeiptr)sizeof(V), vb, GL_STREAM_DRAW);
@@ -449,7 +461,9 @@ static void on_cmd(struct android_app *app, int32_t cmd)
 
   switch (cmd) {
     case APP_CMD_INIT_WINDOW:
+      LOGI("APP_CMD_INIT_WINDOW");
       e->ready = e_init(e);
+      if (!e->ready) LOGI("EGL/GL init FAILED, eglGetError=0x%x", eglGetError());
       break;
     case APP_CMD_TERM_WINDOW:
       e_term(e);
@@ -459,8 +473,10 @@ static void on_cmd(struct android_app *app, int32_t cmd)
         EGLint w, h;
         eglQuerySurface(e->dpy, e->surf, EGL_WIDTH, &w);
         eglQuerySurface(e->dpy, e->surf, EGL_HEIGHT, &h);
-        e->W = w; e->H = h; gW = w; gH = h;
-        glViewport(0, 0, w, h);
+        if (w > 0 && h > 0) {                 /* guard от нулевого окна */
+          e->W = w; e->H = h; gW = w; gH = h;
+          glViewport(0, 0, w, h);
+        }
       }
       break;
     case APP_CMD_GAINED_FOCUS:
@@ -493,7 +509,9 @@ void android_main(struct android_app *state)
   state->onAppCmd = on_cmd;
   state->onInputEvent = on_input;
 
+  LOGI("android_main: Geometry Dash for Derka starting");
   gd_init(&e.g);
+  LOGI("level ready: %d objects, %.0f blocks", e.g.n, e.g.len);
 
   for (;;) {
     while ((ident = ALooper_pollAll(e.anim && e.ready ? 0 : -1, NULL, &events,

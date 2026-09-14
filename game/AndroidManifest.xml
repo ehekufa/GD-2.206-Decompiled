@@ -21,7 +21,7 @@
 
         <activity
             android:name="android.app.NativeActivity"
-            android:configChanges="orientation|keyboard|keyboardHidden|screenSize|screenLayout"
+            android:configChanges="orientation|keyboard|keyboardHidden|screenSize|screenLayout|smallestScreenSize|uiMode|layoutDirection|density|fontScale|navigation"
             android:screenOrientation="landscape"
             android:exported="true">
 

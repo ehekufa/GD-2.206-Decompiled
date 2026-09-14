@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check package consistency
         run: |
@@ -35,7 +35,7 @@ jobs:
           /tmp/gdsim 0        # автопилот обязан пройти уровень
           /tmp/gdsim -0.6     # и с опозданием прыжка на 0.6 блока
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;34.0.0"
@@ -59,6 +59,7 @@ jobs:
             set -- $ABI
             mkdir -p "staging/lib/$1"
             "$TOOLCHAIN/$2" -O3 -std=gnu99 -s -fPIC -shared \
+              -Wl,-z,max-page-size=16384 \
               game/game.c game/gd_core.c "$GLUE/android_native_app_glue.c" \
               -Igame -I"$GLUE" -landroid -llog -lm \
               -o "staging/lib/$1/libgd_derka.so"
@@ -133,7 +134,7 @@ jobs:
         if: ${{ always() }}
         run: rm -rf -- "${RUNNER_TEMP:?}/derka-signing"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: GeometryDashForDerka-APK-Android8-15
           path: Game.apk
