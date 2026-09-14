@@ -38,8 +38,9 @@ CI делает то же самое на каждом пуше.
 ## Сборка APK
 
 `.github/workflows/build-apk.yml`: NDK r25c → `libgd_derka.so` для трёх ABI →
-`aapt package` (без Gradle!) → `zipalign` → подпись `apksigner` из секретов репозитория
-(`GD_P12_BASE64`, `GD_P12_PASSWORD`, опционально `GD_KEY_ALIAS`; если их нет —
-подхватываются старые `CB4_*`). Артефакт — `Game.apk`.
+`aapt package` (без Gradle!) → `zipalign` → `apksigner`. Ключ берётся из секретов
+репозитория (`GD_P12_BASE64`, `GD_P12_PASSWORD`, опционально `GD_KEY_ALIAS`; фолбэк —
+старые `CB4_*`). Если секретов нет, CI подписывает одноразовым отладочным ключом:
+APK ставится на устройство, но для сторов нужно добавить свои секреты. Артефакт — `Game.apk`.
 
 Управление: тап по экрану / пробел / D-pad.
