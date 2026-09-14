@@ -1,6 +1,8 @@
 .vscode
 # I sometimes have random python scripts laying around which may seem messy to some people
 *.py
+# ...but CI-скрипты игры нужны в репозитории
+!tools/*.py
 *.txt
 # I use these for moving things to ghidra
 vtables 
