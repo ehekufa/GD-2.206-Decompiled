@@ -18,7 +18,8 @@ adb devices | head -4 | while IFS= read -r l; do note "dev: $l"; done
 adb install -r Game.apk || die "adb install failed"
 note "stage=installed"
 
-adb shell am start -W -n "$PKG/$ACT" || note "am start rc=$?"
+adb shell am start -W -n "$PKG/$ACT" > amstart.txt 2>&1 || note "am start rc=$?"
+head -6 amstart.txt | while IFS= read -r l; do note "amstart: $l"; done
 note "stage=started, sleeping 20s"
 sleep 20
 
@@ -28,23 +29,30 @@ note "stage=pid pid=${PID:-DEAD}"
 adb logcat -d > logcat.txt || true
 {
   echo "run=${GITHUB_RUN_ID:-?} pid=${PID:-DEAD}"
-  grep -aE 'FATAL EXCEPTION|Fatal signal|gdderka|AndroidRuntime|UnsatisfiedLink|dlopen|libc    ' logcat.txt | head -12
+  echo "--- am start ---"; cat amstart.txt 2>/dev/null | head -8
+  echo "--- targeted ---"
+  grep -aE 'derka|NativeActivity|FATAL EXCEPTION|Fatal signal|UnsatisfiedLink|dlopen failed' logcat.txt | head -12
   if [ -z "$PID" ]; then
     echo "--- backtrace ---"
     grep -a -A14 'Fatal signal' logcat.txt | head -30
     echo "--- java crash ---"
     grep -a -A16 'FATAL EXCEPTION' logcat.txt | head -30
+    echo "--- raw tail ---"
+    tail -n 40 logcat.txt
   fi
 } > smoke.txt
 
-# дублируем отчёт в issue: его, в отличие от логов шага, можно прочитать снаружи
+# дублируем отчёт в комментарий PR: его, в отличие от логов шага, можно прочитать снаружи
 if command -v gh >/dev/null 2>&1 && [ -n "${GITHUB_TOKEN:-}" ]; then
   BODY=$(cat smoke.txt)
-  NUM=$(gh issue list --state open --search "in:title Smoke report" --json number --jq '.[0].number' 2>/dev/null || true)
-  if [ -n "$NUM" ]; then
-    gh issue comment "$NUM" --body "$BODY" >/dev/null 2>&1 || true
-  else
-    gh issue create --title "Smoke report (auto)" --body "$BODY" >/dev/null 2>&1 || true
+  PRNUM=$(gh pr list --state open --json number,headRefName \
+          --jq '.[] | select(.headRefName=="'"${GITHUB_REF_NAME:-}"'") | .number' 2>/dev/null | head -1)
+  if [ -n "$PRNUM" ]; then
+    gh pr comment "$PRNUM" --body "smoke run ${GITHUB_RUN_ID:-?}:
+\`\`\`
+$BODY
+\`\`\`" >/dev/null 2>&1 || true
+    note "report posted to PR #$PRNUM"
   fi
 fi
 
