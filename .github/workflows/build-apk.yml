@@ -130,6 +130,39 @@ jobs:
             && echo "::notice::Signed with throwaway CI key. Add GD_P12_BASE64/GD_P12_PASSWORD secrets for a store-ready signature." \
             || echo "Signed with the repository key."
 
+      - name: Inspect APK contents
+        run: |
+          unzip -l Game.apk | grep -E 'lib/|arsc|AndroidManifest|ic_launcher' || true
+          N=$(unzip -l Game.apk | grep -c 'lib/.*/libgd_derka.so' || true)
+          if [[ "$N" != "3" ]]; then
+            echo "::error::APK contains $N native libs, expected 3 (arm64/arm32/x86_64) - this crashes on launch."
+            exit 1
+          fi
+          echo "::notice::APK libs OK: $(unzip -l Game.apk | grep -o 'lib/[a-z0-9_-]*/' | sort -u | tr -d '\n')"
+
+      - name: Emulator smoke test (boot the game, capture logcat)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: default
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb wait-for-device
+            adb install -r Game.apk || { echo "::error::adb install failed"; exit 1; }
+            adb shell am start -W -n com.derka.gd/android.app.NativeActivity || true
+            sleep 20
+            PID=$(adb shell pidof com.derka.gd || true)
+            adb logcat -d > logcat.txt || true
+            { echo "pid=${PID:-DEAD}";
+              grep -aE 'FATAL EXCEPTION|Fatal signal|gdderka|AndroidRuntime|UnsatisfiedLink|dlopen' logcat.txt | head -12; } > smoke.txt
+            if [[ -z "$PID" ]]; then
+              head -12 smoke.txt | while IFS= read -r l; do echo "::error::SMOKE: $l"; done
+              exit 1
+            fi
+            head -12 smoke.txt | while IFS= read -r l; do echo "::notice::SMOKE: $l"; done
+            adb shell am force-stop com.derka.gd
+
       - name: Delete temporary signing key
         if: ${{ always() }}
         run: rm -rf -- "${RUNNER_TEMP:?}/derka-signing"
