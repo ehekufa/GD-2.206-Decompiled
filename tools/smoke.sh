@@ -15,9 +15,9 @@ post_report() {
     cp smoke.txt ci-smoke-report.txt
     git config user.email "ci-bot@users.noreply.github.com" 2>/dev/null || true
     git config user.name "ci-smoke-bot" 2>/dev/null || true
-    git add ci-smoke-report.txt 2>/dev/null || true
-    git commit -q -m "ci: smoke report run ${GITHUB_RUN_ID:-?} [skip ci]" 2>/dev/null || true
-    git push -q -f origin HEAD:refs/heads/ci/smoke-report 2>/dev/null || echo "::warning::SMOKE: report push failed"
+    git add ci-smoke-report.txt || echo "::warning::SMOKE: git add report failed"
+    git commit -q -m "ci: smoke report run ${GITHUB_RUN_ID:-?} [skip ci]" || echo "::warning::SMOKE: git commit report failed"
+    git push -q -f origin HEAD:refs/heads/ci/smoke-report || echo "::warning::SMOKE: report push failed"
   fi
   if command -v gh >/dev/null 2>&1 && [ -n "${GITHUB_TOKEN:-}" ]; then
     local body; body=$(cat smoke.txt)
@@ -88,10 +88,16 @@ note "stage=pid pid=${PID:-DEAD}"
 
 post_report
 
+# 4 плотные аннотации: одна аннотация = до 15 строк отчёта (не режутся лимитом)
+chunk() {
+  sed -n "$1,$2p" smoke.txt | sed 's/$/%0A/' | tr -d '\n' | sed "s|^|::error::SMOKE REPORT $3%0A|"
+  echo
+}
 if [ -z "$PID" ]; then
-  head -40 smoke.txt | while IFS= read -r l; do echo "::error::SMOKE: $l"; done
+  chunk 1 15 "1/4"; chunk 16 30 "2/4"; chunk 31 45 "3/4"; chunk 46 60 "4/4"
   exit 1
 fi
-head -12 smoke.txt | while IFS= read -r l; do note "$l"; done
+chunk 1 12 "OK"
+note "stage=done, game is alive"
 adb shell am force-stop "$PKG" || true
 note "stage=done, game is alive"
