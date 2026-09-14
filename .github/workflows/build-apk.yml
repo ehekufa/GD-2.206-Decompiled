@@ -61,9 +61,9 @@ jobs:
             set -- $ABI
             mkdir -p "staging/lib/$1"
             "$TOOLCHAIN/$2" -O3 -std=gnu99 -s -fPIC -shared \
-              -Wl,-z,max-page-size=16384 \
+              -Wl,-z,max-page-size=16384 -Wl,--no-undefined \
               game/game.c game/gd_core.c "$GLUE/android_native_app_glue.c" \
-              -Igame -I"$GLUE" -landroid -llog -lm \
+              -Igame -I"$GLUE" -landroid -llog -lm -lGLESv2 -lEGL \
               -o "staging/lib/$1/libgd_derka.so"
           done
 

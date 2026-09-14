@@ -15,7 +15,7 @@ post_report() {
     cp smoke.txt ci-smoke-report.txt
     git config user.email "ci-bot@users.noreply.github.com" 2>/dev/null || true
     git config user.name "ci-smoke-bot" 2>/dev/null || true
-    git add ci-smoke-report.txt || echo "::warning::SMOKE: git add report failed"
+    git add -f ci-smoke-report.txt || echo "::warning::SMOKE: git add report failed"   # -f: в .gitignore есть *.txt
     git commit -q -m "ci: smoke report run ${GITHUB_RUN_ID:-?} [skip ci]" || echo "::warning::SMOKE: git commit report failed"
     git push -q -f origin HEAD:refs/heads/ci/smoke-report || echo "::warning::SMOKE: report push failed"
   fi
