@@ -1,123 +1,139 @@
 #!/usr/bin/env bash
-# Smoke-тест APK на эмуляторе (вызывается из CI-шага android-emulator-runner).
-# Отчёт (pids, am start, выжимка logcat) постится комментарием в PR: логи шагов снаружи не прочитать.
+# Smoke-тест APK на эмуляторе: поставить, запустить, дождаться первого кадра,
+# снять скриншот и убедиться, что процесс не умер через несколько секунд.
+#
+# Отчёт уходит в сводку задания ($GITHUB_STEP_SUMMARY) и в артефакт smoke-report.
+# В аннотациях остаётся ровно одна строка-вердикт, а ::error:: печатается
+# ТОЛЬКО если игра реально не поехала (раньше отчёт об успехе тоже шёл через
+# ::error::, из-за чего зелёный билд показывал «1 error»).
 set -u
 
 PKG=com.derka.gd
 ACT=android.app.NativeActivity
+GL_TIMEOUT=90        # сколько секунд ждём строку "GL ready" в logcat
+WATCH_SECS=12        # сколько секунд следим, что процесс жив
+TOOLS_DIR=$(cd "$(dirname "$0")" && pwd)
 
-note() { echo "::notice::SMOKE: $*"; }
-die()  { echo "::error::SMOKE: $*"; exit 1; }
+note() { echo "::notice::$*"; }
+warn() { echo "::warning::$*"; }
 
-post_report() {
-  # канал 0: полный отчёт файлом в ветку ci/smoke-report (commit со [skip ci] - без цикла)
-  if [ -d .git ]; then
-    cp smoke.txt ci-smoke-report.txt
-    git config user.email "ci-bot@users.noreply.github.com" 2>/dev/null || true
-    git config user.name "ci-smoke-bot" 2>/dev/null || true
-    git add -f ci-smoke-report.txt || echo "::warning::SMOKE: git add report failed"   # -f: в .gitignore есть *.txt
-    git commit -q -m "ci: smoke report run ${GITHUB_RUN_ID:-?} [skip ci]" || echo "::warning::SMOKE: git commit report failed"
-    git push -q -f origin HEAD:refs/heads/ci/smoke-report || echo "::warning::SMOKE: report push failed"
+: > smoke.txt
+say() { echo "$*" >> smoke.txt; }
+
+report_and_exit() {                      # $1 — код возврата, $2 — вердикт
+  rc="$1"; verdict="$2"
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      echo "## Smoke-тест на эмуляторе — $verdict"
+      echo
+      echo '```text'
+      cat smoke.txt
+      echo '```'
+    } >> "$GITHUB_STEP_SUMMARY"
   fi
-  if command -v gh >/dev/null 2>&1 && [ -n "${GITHUB_TOKEN:-}" ]; then
-    local body; body=$(cat smoke.txt)
-    local num=""
-    num=$(gh pr list --state open --json number,headRefName \
-          --jq '.[] | select(.headRefName=="'"${GITHUB_REF_NAME:-}"'") | .number' 2>/dev/null | head -1) || true
-    if [ -z "$num" ]; then
-      local hr; hr=$(gh pr view 1 --json headRefName --jq .headRefName 2>/dev/null) || true
-      [ "$hr" = "${GITHUB_REF_NAME:-}" ] && num=1
-    fi
-    if [ -n "$num" ]; then
-      gh pr comment "$num" --body "smoke run ${GITHUB_RUN_ID:-?}:
-\`\`\`
-$body
-\`\`\`" >/dev/null 2>&1 || echo "::warning::SMOKE: pr comment failed"
-      note "report posted to PR #$num"
-    else
-      echo "::warning::SMOKE: no PR found for branch, report only in annotations"
-    fi
+  echo "==================== SMOKE REPORT ===================="
+  cat smoke.txt
+  echo "======================================================"
+  if [ "$rc" = 0 ]; then
+    note "SMOKE: $verdict"
+  else
+    echo "::error::SMOKE: $verdict (полный отчёт — в сводке задания и артефакте smoke-report)"
   fi
+  exit "$rc"
 }
 
-note "stage=env adb=$(command -v adb || echo MISSING)"
-adb wait-for-device || die "adb wait-for-device failed"
+# ------------------------------------------------------------------ эмулятор
+adb wait-for-device || report_and_exit 1 "adb wait-for-device не дождался устройства"
 
-# эмулятор может отрапортовать boot раньше, чем поднимутся сервисы
-# (иначе adb install ловит "Can't find service: package")
-B=""
-for i in $(seq 1 90); do
-  B=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || true)
-  [ "$B" = "1" ] && break
+# эмулятор рапортует boot раньше, чем поднимаются сервисы:
+# без этой паузы adb install ловит "Can't find service: package"
+BOOT=""
+for _ in $(seq 1 90); do
+  BOOT=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || true)
+  [ "$BOOT" = "1" ] && break
   sleep 2
 done
-note "boot_completed=${B:-none}"
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   adb shell pm path android >/dev/null 2>&1 && break
   sleep 3
 done
 
+SDK=$(adb shell getprop ro.build.version.sdk 2>/dev/null | tr -d '\r\n' || true)
+ABI=$(adb shell getprop ro.product.cpu.abi 2>/dev/null | tr -d '\r\n' || true)
+say "run=${GITHUB_RUN_ID:-?} boot_completed=${BOOT:-none} api=${SDK:-?} abi=${ABI:-?}"
+
+# ------------------------------------------------------------------ установка
 OK=""
 for i in 1 2 3 4 5; do
   if adb install -r Game.apk > install.txt 2>&1; then OK=1; break; fi
-  note "install attempt $i failed: $(tail -n 1 install.txt)"
+  say "install: попытка $i не удалась: $(tail -n 1 install.txt)"
   sleep 10
 done
-[ -n "$OK" ] || die "adb install failed after 5 attempts: $(tail -n 1 install.txt 2>/dev/null)"
-note "stage=installed"
+[ -n "$OK" ] || report_and_exit 1 "adb install не прошёл за 5 попыток: $(tail -n 1 install.txt 2>/dev/null)"
+say "install: ok, $(adb shell pm path "$PKG" 2>&1 | tr -d '\r' | head -1)"
 
-{ echo "run=${GITHUB_RUN_ID:-?}";
-  echo "--- pm path ---"; adb shell pm path "$PKG" 2>&1 | head -4;
-  echo "--- dumpsys package (abi) ---"; adb shell dumpsys package "$PKG" 2>&1 | grep -aE 'abi|versionName|codePath' | head -6;
-} > pre.txt || true
-
-# большой ring + живой logcat с момента ДО старта
+# --------------------------------------------------------------------- запуск
 adb logcat -G 4M >/dev/null 2>&1 || true
 adb logcat -c    >/dev/null 2>&1 || true
 adb logcat -v time > live.log 2>&1 &
 LOGPID=$!
 
-adb shell am start -W -n "$PKG/$ACT" > amstart.txt 2>&1 || note "am start rc=$?"
-head -6 amstart.txt | while IFS= read -r l; do note "amstart: $l"; done
+adb shell am start -W -n "$PKG/$ACT" > amstart.txt 2>&1 || true
+say "am start: $(tr -d '\r' < amstart.txt | grep -aE '^(Status|LaunchState|TotalTime|WaitTime|Error)' | paste -sd' ' -)"
 
+# ждём первый кадр: игра логирует "GL ready WxH" сразу после eglMakeCurrent
+GLLINE=""
+for t in $(seq 1 "$GL_TIMEOUT"); do
+  GLLINE=$(grep -a -m1 'GL ready' live.log | tr -d '\r' || true)
+  [ -n "$GLLINE" ] && { say "первый кадр получен через ${t}с"; break; }
+  adb shell pidof "$PKG" >/dev/null 2>&1 || { sleep 1; continue; }
+  sleep 1
+done
+
+# ------------------------------------------------------- живой ли процесс
 : > pids.txt
-for i in $(seq 1 10); do
+ALIVE=0; SAMPLES=0
+for i in $(seq 1 $((WATCH_SECS / 2))); do
   P=$(adb shell pidof "$PKG" 2>/dev/null | tr -d '\r\n' || true)
-  echo "t=$((i*2))s pid=${P:-DEAD}" >> pids.txt
+  echo "t=$((i * 2))s pid=${P:-DEAD}" >> pids.txt
+  SAMPLES=$((SAMPLES + 1))
+  [ -n "$P" ] && ALIVE=$((ALIVE + 1))
   sleep 2
 done
-kill "$LOGPID" >/dev/null 2>&1 || true
-wait "$LOGPID" >/dev/null 2>&1 || true
+
+# ------------------------------------------------------------------ скриншот
+adb exec-out screencap    > screen.raw 2>/dev/null || true
+adb exec-out screencap -p > screen.png 2>/dev/null || true
+SHOT=$(python3 "$TOOLS_DIR/screenstat.py" screen.raw --ascii 2>&1); SHOT_RC=$?
 
 PID=$(adb shell pidof "$PKG" 2>/dev/null | tr -d '\r\n' || true)
-note "stage=pid pid=${PID:-DEAD}"
 
 {
-  cat pre.txt
-  echo "--- pids ---"; cat pids.txt
-  echo "--- am start ---"; head -8 amstart.txt
-  echo "--- derka/AM/crash lines ---"
-  grep -aE 'derka|NativeActivity|FATAL|Fatal signal|ANR|avc|Zygote.*derka|ActivityManager|ActivityTaskManager' live.log | head -25
-  echo "--- crash buffer ---"
-  adb logcat -b crash -d 2>/dev/null | head -30
-  echo "--- activity state ---"
-  adb shell dumpsys activity activities 2>/dev/null | grep -a -B2 -A6 derka | head -20
-  echo "--- live tail ---"
-  tail -n 60 live.log
-} > smoke.txt
+  echo "--- логи игры (tag gdderka) ---"
+  grep -a 'gdderka' live.log | tail -12 | tr -d '\r'
+  echo "--- процесс ---"
+  cat pids.txt
+  echo "--- скриншот ---"
+  echo "$SHOT"
+  echo "--- падения/ANR ---"
+  { grep -aE 'FATAL|Fatal signal|ANR in|beginning of crash' live.log | head -10 | tr -d '\r'
+    adb logcat -b crash -d 2>/dev/null | head -10 | tr -d '\r'; } | head -12
+  echo "--- хвост logcat по приложению ---"
+  grep -aE "gdderka|$PKG|NativeActivity" live.log | tail -15 | tr -d '\r'
+} >> smoke.txt
 
-post_report
+kill "$LOGPID" >/dev/null 2>&1 || true
+wait "$LOGPID" >/dev/null 2>&1 || true
+adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
 
-# 4 плотные аннотации: одна аннотация = до 15 строк отчёта (не режутся лимитом)
-chunk() {
-  sed -n "$1,$2p" smoke.txt | sed 's/$/%0A/' | tr -d '\n' | sed "s|^|::error::SMOKE REPORT $3%0A|"
-  echo
-}
-if [ -z "$PID" ]; then
-  chunk 1 15 "1/4"; chunk 16 30 "2/4"; chunk 31 45 "3/4"; chunk 46 60 "4/4"
-  exit 1
+# ------------------------------------------------------------------- вердикт
+[ -n "$PID" ] || report_and_exit 1 "процесс игры умер (${ALIVE}/${SAMPLES} живых замеров) — смотри секцию «падения/ANR»"
+[ -n "$GLLINE" ] || report_and_exit 1 "EGL/GLES не поднялись за ${GL_TIMEOUT}с: в логах нет «GL ready» (чёрный экран/вылет при старте)"
+
+VERTS=$(grep -a -m1 'first frame' live.log | tr -d '\r' | sed 's/.*first frame: //' || true)
+GLSIZE=$(printf '%s' "$GLLINE" | sed 's/.*GL ready //')
+if [ "$SHOT_RC" != 0 ]; then
+  warn "SMOKE: процесс жив и GL поднялся, но screencap вернул однотонный кадр (частая особенность software-GL на эмуляторе)"
+  report_and_exit 0 "игра жива: pid=$PID, GL ready $GLSIZE, кадр ${VERTS:-?}, скриншот однотонный"
 fi
-chunk 1 12 "OK"
-note "stage=done, game is alive"
-adb shell am force-stop "$PKG" || true
-note "stage=done, game is alive"
+report_and_exit 0 "игра жива: pid=$PID, GL ready $GLSIZE, кадр ${VERTS:-?}, скриншот содержит картинку"
