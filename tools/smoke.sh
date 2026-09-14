@@ -27,16 +27,19 @@ PID=$(adb shell pidof "$PKG" | tr -d '\r\n' || true)
 note "stage=pid pid=${PID:-DEAD}"
 
 adb logcat -d > logcat.txt || true
+adb logcat -b crash -d > crashbuf.txt || true      # туда падают FATAL/Fatal signal
+adb logcat -b system -d > systembuf.txt || true
 {
   echo "run=${GITHUB_RUN_ID:-?} pid=${PID:-DEAD}"
   echo "--- am start ---"; cat amstart.txt 2>/dev/null | head -8
+  echo "--- crash buffer ---"; head -50 crashbuf.txt
   echo "--- targeted ---"
-  grep -aE 'derka|NativeActivity|FATAL EXCEPTION|Fatal signal|UnsatisfiedLink|dlopen failed' logcat.txt | head -12
+  grep -aE 'derka|NativeActivity|FATAL EXCEPTION|Fatal signal|UnsatisfiedLink|dlopen failed|ANR|avc' logcat.txt systembuf.txt | head -14
   if [ -z "$PID" ]; then
     echo "--- backtrace ---"
-    grep -a -A14 'Fatal signal' logcat.txt | head -30
+    grep -a -A14 'Fatal signal' logcat.txt crashbuf.txt | head -30
     echo "--- java crash ---"
-    grep -a -A16 'FATAL EXCEPTION' logcat.txt | head -30
+    grep -a -A16 'FATAL EXCEPTION' logcat.txt crashbuf.txt | head -30
     echo "--- raw tail ---"
     tail -n 40 logcat.txt
   fi
