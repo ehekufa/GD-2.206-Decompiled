@@ -10,6 +10,15 @@ note() { echo "::notice::SMOKE: $*"; }
 die()  { echo "::error::SMOKE: $*"; exit 1; }
 
 post_report() {
+  # канал 0: полный отчёт файлом в ветку ci/smoke-report (commit со [skip ci] - без цикла)
+  if [ -d .git ]; then
+    cp smoke.txt ci-smoke-report.txt
+    git config user.email "ci-bot@users.noreply.github.com" 2>/dev/null || true
+    git config user.name "ci-smoke-bot" 2>/dev/null || true
+    git add ci-smoke-report.txt 2>/dev/null || true
+    git commit -q -m "ci: smoke report run ${GITHUB_RUN_ID:-?} [skip ci]" 2>/dev/null || true
+    git push -q -f origin HEAD:refs/heads/ci/smoke-report 2>/dev/null || echo "::warning::SMOKE: report push failed"
+  fi
   if command -v gh >/dev/null 2>&1 && [ -n "${GITHUB_TOKEN:-}" ]; then
     local body; body=$(cat smoke.txt)
     local num=""
@@ -69,8 +78,12 @@ note "stage=pid pid=${PID:-DEAD}"
   echo "--- am start ---"; head -8 amstart.txt
   echo "--- derka/AM/crash lines ---"
   grep -aE 'derka|NativeActivity|FATAL|Fatal signal|ANR|avc|Zygote.*derka|ActivityManager|ActivityTaskManager' live.log | head -25
+  echo "--- crash buffer ---"
+  adb logcat -b crash -d 2>/dev/null | head -30
+  echo "--- activity state ---"
+  adb shell dumpsys activity activities 2>/dev/null | grep -a -B2 -A6 derka | head -20
   echo "--- live tail ---"
-  tail -n 50 live.log
+  tail -n 60 live.log
 } > smoke.txt
 
 post_report
