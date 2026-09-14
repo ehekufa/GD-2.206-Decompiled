@@ -43,7 +43,27 @@ $body
 note "stage=env adb=$(command -v adb || echo MISSING)"
 adb wait-for-device || die "adb wait-for-device failed"
 
-adb install -r Game.apk || die "adb install failed"
+# эмулятор может отрапортовать boot раньше, чем поднимутся сервисы
+# (иначе adb install ловит "Can't find service: package")
+B=""
+for i in $(seq 1 90); do
+  B=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n' || true)
+  [ "$B" = "1" ] && break
+  sleep 2
+done
+note "boot_completed=${B:-none}"
+for i in $(seq 1 60); do
+  adb shell pm path android >/dev/null 2>&1 && break
+  sleep 3
+done
+
+OK=""
+for i in 1 2 3 4 5; do
+  if adb install -r Game.apk > install.txt 2>&1; then OK=1; break; fi
+  note "install attempt $i failed: $(tail -n 1 install.txt)"
+  sleep 10
+done
+[ -n "$OK" ] || die "adb install failed after 5 attempts: $(tail -n 1 install.txt 2>/dev/null)"
 note "stage=installed"
 
 { echo "run=${GITHUB_RUN_ID:-?}";
