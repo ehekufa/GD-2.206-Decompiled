@@ -155,12 +155,16 @@ jobs:
             PID=$(adb shell pidof com.derka.gd || true)
             adb logcat -d > logcat.txt || true
             { echo "pid=${PID:-DEAD}";
-              grep -aE 'FATAL EXCEPTION|Fatal signal|gdderka|AndroidRuntime|UnsatisfiedLink|dlopen' logcat.txt | head -12; } > smoke.txt
-            if [[ -z "$PID" ]]; then
-              head -12 smoke.txt | while IFS= read -r l; do echo "::error::SMOKE: $l"; done
+              grep -aE 'FATAL EXCEPTION|Fatal signal|gdderka|AndroidRuntime|UnsatisfiedLink|dlopen' logcat.txt | head -8;
+              if [ -z "$PID" ]; then
+                grep -a -A12 'Fatal signal' logcat.txt | head -26;
+                grep -a -A14 'FATAL EXCEPTION' logcat.txt | head -26;
+              fi; } > smoke.txt
+            if [ -z "$PID" ]; then
+              head -30 smoke.txt | while IFS= read -r l; do echo "::error::SMOKE: $l"; done
               exit 1
             fi
-            head -12 smoke.txt | while IFS= read -r l; do echo "::notice::SMOKE: $l"; done
+            head -10 smoke.txt | while IFS= read -r l; do echo "::notice::SMOKE: $l"; done
             adb shell am force-stop com.derka.gd
 
       - name: Delete temporary signing key
