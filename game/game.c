@@ -342,6 +342,7 @@ static int e_init(Eng *e)
   GLuint vs, fs;
 
   e->dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+  if (1) { LOGI("TEMP: EGL init sabotaged to verify the CI gate"); e_term(e); return 0; }
   if (e->dpy == EGL_NO_DISPLAY || !eglInitialize(e->dpy, NULL, NULL)) {
     LOGI("eglInitialize failed, err=0x%x", eglGetError()); e_term(e); return 0;
   }
