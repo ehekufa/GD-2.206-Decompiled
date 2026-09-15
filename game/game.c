@@ -48,6 +48,14 @@ typedef struct {
   int scroll;                   /* прокрутка списка уровней */
   int page;                     /* выбранный уровень */
   int garageMode;
+  /* надстройки оболочки под вид настоящего GD */
+  int sub;                      /* LEVELS: 0 = сетка Create/Saved, 1 = мои уровни */
+  int colpop, coltab;           /* гараж: попап цветов, вкладка 0/1/2 = col1/col2/glow */
+  int snap;                     /* редактор: снап к сетке */
+  int eflags;                   /* чекбоксы редактора: 1 сетка, 2 хитбоксы, 4 земля */
+  float zoomf;                  /* редактор: масштаб */
+  int pb[GD_MAX_LVL];           /* лучший % в практике по уровням */
+  int delall;                   /* мои уровни: чекбокс delete all */
 } Eng;
 
 static V vb[MAXV];
@@ -329,6 +337,112 @@ static int button(Eng *e, int id, float x, float y, float w, float h,
   return pressed;
 }
 
+/* ---------- примитивы в стиле настоящего GD ---------- */
+
+static void rrs(float x, float y, float w, float h, float r, C c)
+{
+  quad(x + r, y, w - 2 * r, h, c);
+  quad(x, y + r, w, h - 2 * r, c);
+  disc(x + r, y + r, r, c, 10); disc(x + w - r, y + r, r, c, 10);
+  disc(x + r, y + h - r, r, c, 10); disc(x + w - r, y + h - r, r, c, 10);
+}
+
+static void rrect(float x, float y, float w, float h, float r, C fill, C brd, float bw)
+{
+  if (bw > 0.0f) rrs(x - bw, y - bw, w + 2 * bw, h + 2 * bw, r + bw, brd);
+  rrs(x, y, w, h, r, fill);
+}
+
+/* текст с чёрной обводкой, как надписи в GD */
+static void textol(const char *s, float cx, float y, float sz, C c)
+{
+  float o = sz * 0.16f;
+  text(s, cx + o, y, sz, C4(0, 0, 0, 0.9f)); text(s, cx - o, y, sz, C4(0, 0, 0, 0.9f));
+  text(s, cx, y + o, sz, C4(0, 0, 0, 0.9f)); text(s, cx, y - o, sz, C4(0, 0, 0, 0.9f));
+  text(s, cx, y, sz, c);
+}
+
+/* зелёная кнопка GD: белая кайма, тень, жёлтая надпись */
+static int gbtn(Eng *e, int id, float x, float y, float w, float h, const char *lb, float tsz)
+{
+  int pr;
+  quad(x + 3, y - 3, w, h, C4(0, 0, 0, 0.40f));
+  rrect(x, y, w, h, h * 0.22f, C4(0.42f, 0.80f, 0.20f, 1), C4(1, 1, 1, 1), 2.5f);
+  rrs(x + 3, y + 3, w - 6, h * 0.45f, h * 0.18f, C4(1, 1, 1, 0.14f));
+  if (lb && lb[0]) textol(lb, x + w * 0.5f, y + h * 0.5f - tsz * 0.5f, tsz, C4(1.0f, 0.85f, 0.15f, 1));
+  breg(e, id, x, y, w, h);
+  pr = e->tdown && e->tx >= x && e->tx <= x + w && e->ty >= y && e->ty <= y + h;
+  return pr;
+}
+
+/* круглая кнопка с белым кольцом */
+static int rbtn(Eng *e, int id, float cx, float cy, float r, C body)
+{
+  int pr;
+  disc(cx, cy - 2, r + 4, C4(0, 0, 0, 0.45f), 20);
+  disc(cx, cy, r + 3, C4(1, 1, 1, 1), 20);
+  disc(cx, cy, r, body, 20);
+  disc(cx, cy + r * 0.35f, r * 0.62f, C4(0, 0, 0, 0.10f), 14);
+  breg(e, id, cx - r, cy - r, 2 * r, 2 * r);
+  pr = e->tdown && (e->tx - cx) * (e->tx - cx) + (e->ty - cy) * (e->ty - cy) <= (r + 3) * (r + 3);
+  return pr;
+}
+
+static void lockic(float cx, float cy, float s)
+{
+  ring(cx, cy - s * 0.25f, s * 0.22f, s * 0.38f, C4(0.45f, 0.47f, 0.52f, 1), 10);
+  rrs(cx - s * 0.5f, cy - s * 0.3f, s, s * 0.85f, s * 0.12f, C4(0.55f, 0.58f, 0.63f, 1));
+  quad(cx - s * 0.09f, cy - s * 0.12f, s * 0.18f, s * 0.4f, C4(0.15f, 0.16f, 0.2f, 1));
+}
+
+/* половинчатый диск (угол в градусах) */
+static void adisc(float cx, float cy, float r, float a0, float a1, C c, int seg)
+{
+  int i;
+  for (i = 0; i < seg; i++) {
+    float t0 = (a0 + (a1 - a0) * i / seg) * PI / 180.0f;
+    float t1 = (a0 + (a1 - a0) * (i + 1) / seg) * PI / 180.0f;
+    tri(cx, cy, cx + cosf(t0) * r, cy + sinf(t0) * r, cx + cosf(t1) * r, cy + sinf(t1) * r, c);
+  }
+}
+
+/* мордочка уровня (смайл) */
+static void faceic(float cx, float cy, float r, C c)
+{
+  disc(cx, cy, r, C4(0.05f, 0.06f, 0.12f, 1), 18);
+  disc(cx, cy, r * 0.92f, c, 18);
+  disc(cx - r * 0.32f, cy + r * 0.28f, r * 0.16f, C4(0.05f, 0.06f, 0.12f, 1), 8);
+  disc(cx + r * 0.32f, cy + r * 0.28f, r * 0.16f, C4(0.05f, 0.06f, 0.12f, 1), 8);
+  adisc(cx, cy - r * 0.15f, r * 0.5f, 180, 360, C4(0.05f, 0.06f, 0.12f, 1), 10);
+  quad(cx - r * 0.5f, cy - r * 0.2f, r, r * 0.12f, C4(1, 1, 1, 0.85f));
+}
+
+/* повёрнутый прямоугольник в экранных пикселях */
+static void srq(float cx, float cy, float len, float wd, float ang, C c)
+{
+  float a = ang * PI / 180.0f, co = cosf(a), si = sinf(a);
+  float hx = co * len * 0.5f, hy = si * len * 0.5f;
+  float vx = -si * wd * 0.5f, vy = co * wd * 0.5f;
+  q4(cx - hx - vx, cy - hy - vy, cx + hx - vx, cy + hy - vy,
+     cx + hx + vx, cy + hy + vy, cx - hx + vx, cy - hy + vy, c);
+}
+
+/* квадратная кнопка меню GD (зелёный крест с бирюзовыми уголками) */
+static int sqbtn(Eng *e, int id, float cx, float cy, float s)
+{
+  int pr;
+  float q = s * 0.5f;
+  quad(cx - q + 3, cy - q - 3, s, s, C4(0, 0, 0, 0.4f));
+  quad(cx - q, cy - q * 0.33f, s, q * 0.66f, C4(0.16f, 0.72f, 0.75f, 1));
+  quad(cx - q * 0.33f, cy - q, q * 0.66f, s, C4(0.16f, 0.72f, 0.75f, 1));
+  rrs(cx - q + 2, cy - q * 0.33f + 2, s - 4, q * 0.66f - 4, 4, C4(0.42f, 0.80f, 0.20f, 1));
+  rrs(cx - q * 0.33f + 2, cy - q + 2, q * 0.66f - 4, s - 4, 4, C4(0.42f, 0.80f, 0.20f, 1));
+  rrect(cx - q + 2, cy - q + 2, s - 4, s - 4, 6, C4(0, 0, 0, 0.0f), C4(1, 1, 1, 0.9f), 2);
+  breg(e, id, cx - q, cy - q, s, s);
+  pr = e->tdown && e->tx >= cx - q && e->tx <= cx + q && e->ty >= cy - q && e->ty <= cy + q;
+  return pr;
+}
+
 static void say(Eng *e, const char *s)
 {
   int i;
@@ -606,6 +720,10 @@ static void draw_game(Eng *e)
 
   /* HUD: прогресс-бар */
   prog = gd_prog(g);
+  if (g->practice && g->cur < GD_MAX_LVL) {
+    int pc = (int)(prog * 100.0f);
+    if (pc > e->pb[g->cur]) e->pb[g->cur] = pc;
+  }
   bw = (float)e->W * 0.42f; bh = 14.0f;
   bx = ((float)e->W - bw) * 0.5f; by = (float)e->H - 46.0f;
   quad(bx - 2, by - 2, bw + 4, bh + 4, C4(0, 0, 0, 0.5f));
@@ -639,176 +757,364 @@ static void draw_game(Eng *e)
 
 static const char *DIFF[] = { "NA", "EASY", "NORMAL", "HARD", "HARDER", "INSANE", "DEMON", "DEMON" };
 
-static void head(Eng *e, const char *title)
-{
-  quad(0, (float)e->H - 70, (float)e->W, 70, C4(0, 0, 0, 0.35f));
-  textsh(title, (float)e->W * 0.5f, (float)e->H - 46, 26, C4(1, 1, 1, 1));
-}
-
-static void draw_menu(Eng *e)
-{
-  GDGame *g = &e->g;
-  GDLevel *L = g->L;
-  float cx = (float)e->W * 0.5f, w = 300, h = 64, y;
-  char b[64];
-
-  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.06f, 0.09f, 0.28f, 1), C4(0.16f, 0.05f, 0.30f, 1));
-  {
-    int i;
-    for (i = 0; i < 12; i++) {
-      float off = fmodf(g->t * 18.0f + i * 90.0f, (float)e->H + 200.0f);
-      q4(-80, off, (float)e->W + 80, off + 60, (float)e->W + 80, off + 110, -80, off + 50,
-         C4(1, 1, 1, 0.045f));
-    }
-  }
-
-  textsh("GEOMETRY DASH", cx, (float)e->H - 110, 40, C4(1, 1, 1, 1));
-  textsh("FOR DERKA", cx, (float)e->H - 142, 16, C4(0.6f, 0.9f, 1.0f, 1));
-
-  y = (float)e->H - 230;
-  if (button(e, 1, cx - w * 0.5f, y, w, h, "PLAY", C4(0.20f, 0.55f, 0.95f, 1), C4(1, 1, 1, 1), 22))
-    gd_scr(g, GD_SCR_LEVELS);
-  y -= h + 14;
-  if (button(e, 2, cx - w * 0.5f, y, w, h, "CREATOR", C4(0.30f, 0.75f, 0.35f, 1), C4(1, 1, 1, 1), 22)) {
-    if (g->nlv < GD_MAX_LVL) {
-      int li = gd_lvl_new(g, "New Level", g->loggedIn ? g->acc[g->curAcc].name : "Derka");
-      gd_lvl_select(g, li);
-      gd_ed_init(g, li, GD_TOOL_BUILD, 0);
-      g->curObj = GD_BLOCK;
-      gd_scr(g, GD_SCR_EDITOR);
-    }
-  }
-  y -= h + 14;
-  if (button(e, 3, cx - w * 0.5f, y, w * 0.5f - 7, h, "GARAGE", C4(0.85f, 0.55f, 0.20f, 1),
-             C4(1, 1, 1, 1), 18))
-    gd_scr(g, GD_SCR_GARAGE);
-  if (button(e, 4, cx + 7, y, w * 0.5f - 7, h, "MORE", C4(0.55f, 0.35f, 0.85f, 1),
-             C4(1, 1, 1, 1), 18))
-    gd_scr(g, GD_SCR_SETTINGS);
-
-  /* панель аккаунта */
-  y -= h + 22;
-  quad(cx - w * 0.5f, y - 6, w, 54, C4(0, 0, 0, 0.3f));
-  if (g->loggedIn && g->curAcc >= 0) {
-    GDAcc *a = &g->acc[g->curAcc];
-    textL(a->name, cx - w * 0.5f + 14, y + 30, 16, C4(1, 1, 1, 1));
-    fmti(b, "STARS ", a->stars, "");
-    textL(b, cx - w * 0.5f + 14, y + 8, 12, C4(0.8f, 0.9f, 1.0f, 1));
-    fmti(b, "ORBS ", a->orbs, "");
-    textL(b, cx - w * 0.5f + 130, y + 8, 12, C4(0.8f, 0.9f, 1.0f, 1));
-    if (button(e, 5, cx + w * 0.5f - 92, y + 8, 80, 38, "PROFILE", C4(0.2f, 0.4f, 0.8f, 1),
-               C4(1, 1, 1, 1), 12))
-      gd_scr(g, GD_SCR_ACCOUNT);
-  } else {
-    textL("NOT LOGGED IN", cx - w * 0.5f + 14, y + 20, 14, C4(0.8f, 0.8f, 0.8f, 1));
-    if (button(e, 5, cx + w * 0.5f - 92, y + 8, 80, 38, "ACCOUNT", C4(0.2f, 0.4f, 0.8f, 1),
-               C4(1, 1, 1, 1), 12))
-      gd_scr(g, GD_SCR_ACCOUNT);
-  }
-
-  fmti(b, "LEVELS ", g->nlv, "");
-  textsh(b, 90.0f, 24.0f, 13, C4(1, 1, 1, 0.7f));
-  if (L) textsh(L->name, (float)e->W - 140.0f, 24.0f, 13, C4(1, 1, 1, 0.7f));
-}
-
-static void draw_levels(Eng *e)
-{
-  GDGame *g = &e->g;
-  float w = (float)e->W - 120, h = 84;
-  int i;
-  char b[80];
-
-  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.05f, 0.08f, 0.24f, 1), C4(0.12f, 0.06f, 0.26f, 1));
-  head(e, "LEVELS");
-  if (button(e, 10, 16.0f, (float)e->H - 62, 84, 48, "< BACK", C4(0.25f, 0.35f, 0.65f, 1),
-             C4(1, 1, 1, 1), 14))
-    gd_scr(g, GD_SCR_MENU);
-
-  for (i = 0; i < g->nlv; i++) {
-    GDLevel *lv = gd_level_ptr(g, i);
-    float y = (float)e->H - 110 - (float)e->scroll - (float)i * (h + 12);
-    C bg;
-    if (!lv || y < -h || y > (float)e->H) continue;
-    bg = lv->official ? C4(0.20f, 0.45f, 0.85f, 1) : C4(0.30f, 0.60f, 0.35f, 1);
-    quad(58, y, w, h, C4(0, 0, 0, 0.35f));
-    quad(60, y + 2, w - 4, h - 4, bg);
-    quad(60, y + h * 0.6f, w - 4, h * 0.4f - 2, C4(1, 1, 1, 0.10f));
-    textL(lv->name, 76, y + h - 34, 18, C4(1, 1, 1, 1));
-    scat(b, "BY ", lv->author);
-    textL(b, 76, y + h - 56, 12, C4(0.85f, 0.9f, 1.0f, 1));
-    textL(DIFF[lv->diff < 7 ? lv->diff : 6], 76, y + 12, 13, C4(1, 1, 0.6f, 1));
-    fmti(b, "BEST ", lv->best, "%");
-    textL(b, 240, y + 12, 13, C4(1, 1, 1, 0.9f));
-    fmti(b, "* ", lv->stars, "");
-    textL(b, 380, y + 12, 13, C4(1.0f, 0.85f, 0.2f, 1));
-    fmti(b, "OBJ ", lv->nobj, "");
-    textL(b, 500, y + 12, 13, C4(1, 1, 1, 0.75f));
-    breg(e, 100 + i, 58, y, w, h);
-    if (hit(100 + i, e, e->tx, e->ty) && e->tdown && !e->moved) {
-      e->page = i;
-      gd_scr(g, GD_SCR_PAGE);
-    }
-  }
-}
-
-static void draw_page(Eng *e)
-{
-  GDGame *g = &e->g;
-  GDLevel *L = gd_level_ptr(g, e->page);
-  float cx = (float)e->W * 0.5f, w = 320, h = 60, y;
-  char b[80];
-
-  if (!L) { gd_scr(g, GD_SCR_LEVELS); return; }
-  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.06f, 0.10f, 0.28f, 1), C4(0.16f, 0.06f, 0.28f, 1));
-
-  textsh(L->name, cx, (float)e->H - 110, 30, C4(1, 1, 1, 1));
-  scat(b, "BY ", L->author);
-  textsh(b, cx, (float)e->H - 142, 15, C4(0.75f, 0.85f, 1.0f, 1));
-  scat(b, "", DIFF[L->diff < 7 ? L->diff : 6]);
-  textsh(b, cx - 130, (float)e->H - 190, 18, C4(1, 1, 0.55f, 1));
-  fmti(b, "* ", L->stars, "");
-  textsh(b, cx, (float)e->H - 190, 18, C4(1.0f, 0.85f, 0.2f, 1));
-  fmti(b, "BEST ", L->best, "%");
-  textsh(b, cx + 130, (float)e->H - 190, 18, C4(0.6f, 1.0f, 0.7f, 1));
-  fmti(b, "OBJECTS ", L->nobj, "");
-  textsh(b, cx, (float)e->H - 220, 13, C4(1, 1, 1, 0.75f));
-
-  y = (float)e->H - 320;
-  if (button(e, 20, cx - w * 0.5f, y, w, h, "PLAY", C4(0.20f, 0.55f, 0.95f, 1), C4(1, 1, 1, 1), 20)) {
-    gd_start(g, e->page, 0);
-    e->popup = 0;
-  }
-  y -= h + 12;
-  if (button(e, 21, cx - w * 0.5f, y, w, h, "PRACTICE", C4(0.25f, 0.70f, 0.40f, 1),
-             C4(1, 1, 1, 1), 20))
-    gd_start(g, e->page, 1);
-  y -= h + 12;
-  if (!L->official) {
-    if (button(e, 22, cx - w * 0.5f, y, w * 0.5f - 6, h, "EDIT", C4(0.85f, 0.55f, 0.20f, 1),
-               C4(1, 1, 1, 1), 18)) {
-      gd_ed_init(g, e->page, GD_TOOL_BUILD, 0);
-      gd_scr(g, GD_SCR_EDITOR);
-    }
-    if (button(e, 23, cx + 6, y, w * 0.5f - 6, h, "DELETE", C4(0.75f, 0.25f, 0.25f, 1),
-               C4(1, 1, 1, 1), 18)) {
-      gd_lvl_delete(g, e->page);
-      gd_scr(g, GD_SCR_LEVELS);
-    }
-    y -= h + 12;
-  }
-  if (button(e, 24, cx - w * 0.5f, y, w, h, "< BACK", C4(0.25f, 0.35f, 0.65f, 1),
-             C4(1, 1, 1, 1), 18))
-    gd_scr(g, GD_SCR_LEVELS);
-}
-
-/* ------------------------------------------------------------- гараж */
-
 static const C PALETTE[12] = {
   { 0.20f, 0.60f, 1.00f, 1 }, { 0.30f, 0.90f, 0.40f, 1 }, { 1.00f, 0.80f, 0.20f, 1 },
   { 1.00f, 0.35f, 0.35f, 1 }, { 0.80f, 0.40f, 1.00f, 1 }, { 1.00f, 0.50f, 0.20f, 1 },
   { 0.30f, 0.90f, 0.90f, 1 }, { 1.00f, 0.45f, 0.80f, 1 }, { 0.95f, 0.95f, 0.95f, 1 },
   { 0.45f, 0.50f, 0.65f, 1 }, { 0.15f, 0.18f, 0.30f, 1 }, { 0.60f, 0.35f, 0.20f, 1 }
 };
+
+static void draw_colpop(Eng *e, int acc, int c1i, int c2i, int glow);
+static void modeic(float cx, float cy, float r, int mode, C a, C b2);
+static void iconart(float cx, float cy, int v, C c);
+
+static void head(Eng *e, const char *title)
+{
+  quad(0, (float)e->H - 70, (float)e->W, 70, C4(0, 0, 0, 0.35f));
+  textsh(title, (float)e->W * 0.5f, (float)e->H - 46, 26, C4(1, 1, 1, 1));
+}
+
+static void menu_bg(Eng *e, float r0, float g0, float b0, float r1, float g1, float b1)
+{
+  int i;
+  vgrad(0, 0, (float)e->W, (float)e->H, C4(r0, g0, b0, 1), C4(r1, g1, b1, 1));
+  /* блочный узор фона, как в GD */
+  for (i = 0; i < 24; i++) {
+    float bw = 90.0f + (float)((i * 53) % 120);
+    float bh = 60.0f + (float)((i * 31) % 80);
+    float x = (float)((i * 211) % (e->W + 200)) - 100.0f;
+    float y = (float)((i * 167) % (e->H + 160)) - 80.0f;
+    quad(x, y, bw, bh, C4(0, 0, 0, 0.07f));
+  }
+  quad(0, (float)e->H * 0.28f, (float)e->W, 3, C4(1, 1, 1, 0.7f));
+}
+
+static void draw_menu(Eng *e)
+{
+  GDGame *g = &e->g;
+  float cx = (float)e->W * 0.5f, my = (float)e->H * 0.52f;
+  int acc = g->loggedIn ? g->curAcc : -1;
+  C c1 = C4(0.2f, 0.8f, 1.0f, 1), c2 = C4(0.2f, 0.8f, 0.3f, 1);
+  GDPlayer pv;
+
+  menu_bg(e, 0.22f, 0.16f, 0.62f, 0.36f, 0.28f, 0.78f);
+
+  /* лого */
+  textol("GEOMETRY DASH", cx, (float)e->H - 130, 46, C4(0.45f, 0.85f, 0.25f, 1));
+  textsh("GEOMETRY DASH", cx + 3, (float)e->H - 133, 46, C4(0.15f, 0.45f, 0.10f, 0.6f));
+
+  if (acc >= 0) {
+    c1 = PALETTE[g->acc[acc].c1 % 12];
+    c2 = PALETTE[g->acc[acc].c2 % 12];
+  }
+
+  /* левая квадратная кнопка — выбор иконки (гараж) */
+  if (sqbtn(e, 3, cx - 260, my, 130)) gd_scr(g, GD_SCR_GARAGE);
+  memset(&pv, 0, sizeof pv);
+  pv.x = CX + (cx - 260) / SC; pv.y = CY + (my - GY) / SC; pv.mode = GD_CUBE;
+  draw_player(e, &pv, c1, c2, 0);
+
+  /* центральная — играть */
+  if (sqbtn(e, 1, cx, my, 170)) gd_scr(g, GD_SCR_PAGE);
+  tri(cx - 34, my - 52, cx - 34, my + 52, cx + 52, my, C4(0, 0, 0, 0.5f));
+  tri(cx - 30, my - 48, cx - 30, my + 48, cx + 48, my, C4(1.0f, 0.80f, 0.10f, 1));
+  tri(cx - 30, my - 48, cx - 30, my + 10, cx + 16, my - 10, C4(1.0f, 0.95f, 0.5f, 0.7f));
+
+  /* правая — редактор/создатель */
+  if (sqbtn(e, 2, cx + 260, my, 130)) { e->sub = 0; gd_scr(g, GD_SCR_LEVELS); }
+  srq(cx + 260 - 20, my + 16, 84, 18, -45, C4(0.10f, 0.55f, 0.75f, 1));
+  srq(cx + 260 + 20, my + 16, 84, 18, 45, C4(0.85f, 0.65f, 0.10f, 1));
+
+  textsh("CHARACTER SELECT", cx - 260, my - 92, 11, C4(1, 1, 1, 0.9f));
+  textsh("LEVEL EDITOR", cx + 260, my - 92, 11, C4(1, 1, 1, 0.9f));
+
+  /* нижний ряд круглых кнопок */
+  if (rbtn(e, 5, cx - 240, 120, 40, C4(0.30f, 0.70f, 0.20f, 1))) gd_scr(g, GD_SCR_ACCOUNT);
+  quad(cx - 252, 128, 24, 22, C4(1.0f, 0.80f, 0.10f, 1));          /* кубок */
+  quad(cx - 246, 108, 12, 8, C4(1.0f, 0.80f, 0.10f, 1));
+  if (rbtn(e, 4, cx - 120, 120, 40, C4(0.30f, 0.70f, 0.20f, 1))) gd_scr(g, GD_SCR_SETTINGS);
+  ring(cx - 120, 120, 14, 24, C4(0.90f, 0.65f, 0.10f, 1), 12);    /* шестерня */
+  if (rbtn(e, 6, cx, 120, 40, C4(0.30f, 0.70f, 0.20f, 1))) say(e, "STATS: SEE PROFILE");
+  quad(cx - 14, 108, 8, 26, C4(1.0f, 0.80f, 0.10f, 1));
+  quad(cx - 2, 116, 8, 18, C4(1.0f, 0.80f, 0.10f, 1));
+  quad(cx + 10, 100, 8, 34, C4(1.0f, 0.80f, 0.10f, 1));
+  if (rbtn(e, 7, cx + 120, 120, 40, C4(0.30f, 0.70f, 0.20f, 1))) say(e, "SOUNDTRACK: NO ASSETS");
+  disc(cx + 112, 128, 9, C4(1.0f, 0.80f, 0.10f, 1), 10);
+  quad(cx + 119, 104, 4, 26, C4(1.0f, 0.80f, 0.10f, 1));
+
+  /* логотип разработчика */
+  textol("DERTOP", 90, 34, 20, C4(1.0f, 0.55f, 0.10f, 1));
+
+  if (acc >= 0) {
+    char b[48];
+    scat(b, "HI, ", g->acc[acc].name);
+    textsh(b, cx + 200, 40, 13, C4(1, 1, 1, 0.9f));
+  } else {
+    textsh("NO ACCOUNT - PRESS TROPHY", cx + 220, 40, 12, C4(1, 0.9f, 0.5f, 0.9f));
+  }
+}
+
+/* зелёный квадрат-плитка как в онлайн-меню GD */
+static int tile(Eng *e, int id, float x, float y, float s, const char *lb, int locked)
+{
+  int pr;
+  quad(x + 3, y - 3, s, s, C4(0, 0, 0, 0.4f));
+  if (locked) {
+    rrect(x, y, s, s, 8, C4(0.30f, 0.30f, 0.32f, 1), C4(0.10f, 0.10f, 0.12f, 1), 3);
+    lockic(x + s * 0.5f, y + s * 0.52f, s * 0.42f);
+    textol(lb, x + s * 0.5f, y + 8, 12, C4(0.75f, 0.75f, 0.78f, 1));
+  } else {
+    rrect(x, y, s, s, 8, C4(0.42f, 0.80f, 0.20f, 1), C4(0.05f, 0.2f, 0.05f, 1), 3);
+    rrs(x + 4, y + s * 0.5f, s - 8, s * 0.5f - 4, 6, C4(0, 0, 0, 0.10f));
+    textol(lb, x + s * 0.5f, y + 8, 12, C4(1, 1, 1, 1));
+  }
+  breg(e, id, x, y, s, s);
+  pr = e->tdown && !locked && e->tx >= x && e->tx <= x + s && e->ty >= y && e->ty <= y + s;
+  return pr;
+}
+
+static void draw_levels(Eng *e)
+{
+  GDGame *g = &e->g;
+  int i;
+  char b[80];
+  float s = 150, gx = 34, gy = 40;
+  static const char *T[15] = {
+    "CREATE", "SAVED", "SCORES", "QUESTS", "VERSUS",
+    "THE MAP", "DAILY", "WEEKLY", "EVENT", "GAUNTLETS",
+    "FEATURED", "LISTS", "PATHS", "MAP PACKS", "SEARCH"
+  };
+  static const char openmap[15] = { 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.02f, 0.25f, 0.75f, 1), C4(0.05f, 0.45f, 0.95f, 1));
+  /* стрелка назад (розовая) */
+  if (rbtn(e, 10, 60, (float)e->H - 60, 40, C4(0.95f, 0.45f, 0.85f, 1))) {
+    if (e->sub) e->sub = 0; else gd_scr(g, GD_SCR_MENU);
+  }
+  tri(74, (float)e->H - 82, 74, (float)e->H - 38, 42, (float)e->H - 60, C4(1, 1, 1, 0.9f));
+
+  if (!e->sub) {
+    /* сетка 5x3 как в GD */
+    lockic((float)e->W - 60, (float)e->H - 70, 40);
+    fmti(b, "", g->loggedIn ? g->acc[g->curAcc].diamonds : 0, "");
+    textol(b, (float)e->W - 80, (float)e->H - 108, 16, C4(1, 1, 1, 1));
+    disc((float)e->W - 40, (float)e->H - 100, 10, C4(0.3f, 0.8f, 1.0f, 1), 10);
+
+    for (i = 0; i < 15; i++) {
+      float x = (float)e->W * 0.5f + (i % 5 - 2) * (s + gx) - s * 0.5f;
+      float y = (float)e->H - 150 - (2 - i / 5) * (s + gy) + 40;
+      int locked = !openmap[i];
+      if (tile(e, 100 + i, x, y, s, T[i], locked)) {
+        if (i == 0) { /* CREATE */
+          if (g->nlv < GD_MAX_LVL) {
+            int li = gd_lvl_new(g, "Unnamed", g->loggedIn ? g->acc[g->curAcc].name : "Derka");
+            e->page = li; gd_lvl_select(g, li);
+            gd_scr(g, GD_SCR_PAGE);
+          } else say(e, "TOO MANY LEVELS");
+        } else if (i == 1) { e->sub = 1; e->delall = 0; }
+      }
+      /* иконки плиток */
+      if (i == 0) { srq(x + s * 0.5f - 14, y + s * 0.58f, 70, 14, -45, C4(0.10f, 0.55f, 0.75f, 1));
+                    srq(x + s * 0.5f + 14, y + s * 0.58f, 70, 14, 45, C4(0.85f, 0.65f, 0.10f, 1)); }
+      if (i == 1) { rrs(x + s * 0.28f, y + s * 0.42f, s * 0.44f, s * 0.34f, 6, C4(0.95f, 0.75f, 0.20f, 1)); }
+      if (i == 6) { faceic(x + s * 0.5f, y + s * 0.6f, s * 0.2f, C4(1.0f, 0.75f, 0.10f, 1)); }
+    }
+    return;
+  }
+
+  /* ---- My Levels ---- */
+  {
+    float px = 170, py = 90, pw = (float)e->W - 340, ph = (float)e->H - 200;
+    int n = 0, idx[GD_MAX_LVL];
+    for (i = 0; i < g->nlv; i++) if (!gd_level_ptr(g, i)->official) idx[n++] = i;
+
+    rrect(px, py, pw, 46, 8, C4(0.42f, 0.80f, 0.20f, 1), C4(0.16f, 0.72f, 0.75f, 1), 6);
+    textol("MY LEVELS", px + pw * 0.5f, py + 14, 22, C4(1, 1, 1, 1));
+    rrect(px, py + 46, pw, ph - 46, 4, C4(0.62f, 0.42f, 0.22f, 1), C4(0.42f, 0.80f, 0.20f, 1), 6);
+
+    fmti(b, "1 TO ", n, " OF ");
+    fmti(b + slen(b), "", n, "");
+    textol(b, (float)e->W - 120, (float)e->H - 40, 14, C4(1.0f, 0.85f, 0.2f, 1));
+
+    for (i = 0; i < n && i < 5; i++) {
+      GDLevel *lv = gd_level_ptr(g, idx[i]);
+      float y = py + ph - 90 - (float)i * 78;
+      quad(px + 8, y, pw - 16, 70, C4(0, 0, 0, 0.15f));
+      textol(lv->name, px + 40, y + 36, 20, C4(1, 1, 1, 1));
+      textsh("PLAT.", px + 90, y + 10, 12, C4(1, 1, 1, 0.9f));
+      disc(px + 60, y + 16, 9, C4(0.8f, 0.8f, 0.8f, 1), 10);
+      textsh("STEREO MADNESS", px + 230, y + 10, 12, C4(1, 1, 1, 0.9f));
+      textsh("UNVERIFIED", px + 400, y + 10, 12, C4(1, 1, 1, 0.9f));
+      disc(px + 360, y + 16, 9, C4(0.2f, 0.7f, 0.9f, 1), 10);
+      if (gbtn(e, 150 + i, px + pw - 150, y + 16, 110, 40, "VIEW", 16)) {
+        e->page = idx[i]; gd_lvl_select(g, idx[i]); gd_scr(g, GD_SCR_PAGE);
+      }
+      breg(e, 160 + i, px + 8, y, pw - 170, 70);
+    }
+
+    /* низ: delete all */
+    rrect(px, py + ph, pw, 40, 6, C4(0.42f, 0.80f, 0.20f, 1), C4(0.16f, 0.72f, 0.75f, 1), 5);
+    rrs(px + 30, py + ph + 10, 22, 22, 4, e->delall ? C4(0.4f, 0.9f, 0.4f, 1) : C4(0.6f, 0.6f, 0.6f, 1));
+    breg(e, 170, px + 30, py + ph + 10, 22, 22);
+    if (e->tdown && hit(170, e, e->tx, e->ty)) e->delall = !e->delall;
+    textol("ALL", px + 78, py + ph + 14, 14, C4(1, 1, 1, 1));
+    if (e->delall && gbtn(e, 171, px + 130, py + ph + 4, 130, 32, "TRASH", 12)) {
+      for (i = n - 1; i >= 0; i--) gd_lvl_delete(g, idx[i]);
+      e->delall = 0; gd_lvl_select(g, 0); say(e, "ALL CUSTOM LEVELS DELETED");
+    }
+
+    /* NEW */
+    if (rbtn(e, 172, (float)e->W - 90, 90, 46, C4(0.95f, 0.55f, 0.85f, 1))) {
+      if (g->nlv < GD_MAX_LVL) {
+        int li = gd_lvl_new(g, "Unnamed", g->loggedIn ? g->acc[g->curAcc].name : "Derka");
+        e->page = li; gd_lvl_select(g, li); gd_scr(g, GD_SCR_PAGE);
+      } else say(e, "TOO MANY LEVELS");
+    }
+    textol("NEW", (float)e->W - 90, 78, 16, C4(1, 1, 1, 1));
+  }
+}
+
+static void page_arrows(Eng *e)
+{
+  GDGame *g = &e->g;
+  /* большие белые стрелы листания уровней */
+  if (rbtn(e, 25, 64, (float)e->H * 0.5f, 46, C4(1, 1, 1, 0.0f))) {
+    e->page = (e->page + g->nlv - 1) % g->nlv; gd_lvl_select(g, e->page);
+  }
+  tri(86, (float)e->H * 0.5f + 44, 86, (float)e->H * 0.5f - 44, 30, (float)e->H * 0.5f, C4(1, 1, 1, 0.95f));
+  if (rbtn(e, 26, (float)e->W - 64, (float)e->H * 0.5f, 46, C4(1, 1, 1, 0.0f))) {
+    e->page = (e->page + 1) % g->nlv; gd_lvl_select(g, e->page);
+  }
+  tri((float)e->W - 86, (float)e->H * 0.5f + 44, (float)e->W - 86, (float)e->H * 0.5f - 44,
+      (float)e->W - 30, (float)e->H * 0.5f, C4(1, 1, 1, 0.95f));
+}
+
+static void draw_page(Eng *e)
+{
+  GDGame *g = &e->g;
+  GDLevel *L = gd_level_ptr(g, e->page);
+  float cx = (float)e->W * 0.5f;
+  char b[80];
+  int i;
+
+  if (!L) { gd_scr(g, GD_SCR_LEVELS); return; }
+  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.02f, 0.15f, 0.65f, 1), C4(0.05f, 0.35f, 0.90f, 1));
+  /* декоративные блоки сверху и снизу, как в GD */
+  for (i = 0; i < 7; i++) {
+    float x = cx - 3.5f * 64 + i * 64;
+    C cc = (i % 2) ? C4(0.42f, 0.80f, 0.20f, 1) : C4(0.16f, 0.72f, 0.75f, 1);
+    quad(x, (float)e->H - 66, 60, 60, cc);
+    quad(x + 6, (float)e->H - 60, 48, 20, C4(1, 1, 1, 0.18f));
+    quad(x, 6, 60, 40, cc);
+  }
+
+  /* назад */
+  if (rbtn(e, 24, 60, (float)e->H - 60, 40, C4(0.42f, 0.80f, 0.20f, 1))) {
+    gd_scr(g, L->official ? GD_SCR_MENU : GD_SCR_LEVELS);
+  }
+  tri(76, (float)e->H - 80, 76, (float)e->H - 40, 40, (float)e->H - 60, C4(0.75f, 0.95f, 0.4f, 1));
+  /* инфо */
+  if (rbtn(e, 27, (float)e->W - 60, (float)e->H - 60, 30, C4(0.15f, 0.70f, 0.85f, 1))) {
+    fmti(b, "OBJ ", L->nobj, "");
+    fmti(b + slen(b), "  BEST ", L->best, "%");
+    say(e, b);
+  }
+  textol("I", (float)e->W - 60, (float)e->H - 74, 22, C4(1, 1, 1, 1));
+
+  if (L->official) {
+    /* ---- карточка официального уровня ---- */
+    float pw = 800, px = cx - pw * 0.5f, py = (float)e->H - 330;
+    rrect(px, py, pw, 170, 14, C4(0.03f, 0.10f, 0.35f, 1), C4(0, 0, 0, 0.0f), 0);
+    faceic(px + 80, py + 85, 42, C4(0.15f, 0.65f, 0.95f, 1));
+    textol(L->name, px + 150 + slen(L->name) * 11, py + 70, 34, C4(1, 1, 1, 1));
+    textol(DIFF[L->diff < 7 ? L->diff : 6], px + 90, py + 30, 12, C4(1, 1, 0.6f, 1));
+    fmti(b, "", L->stars, "");
+    textol(b, px + pw - 90, py + 120, 22, C4(1, 1, 1, 1));
+    /* звезда */
+    adisc(px + pw - 48, py + 128, 16, 90, 450, C4(1.0f, 0.80f, 0.10f, 1), 5);
+    fmti(b, "", g->loggedIn ? g->acc[g->curAcc].orbs : 0, "/50");
+    textol(b, px + 60, py + 16, 18, C4(1, 1, 1, 1));
+    disc(px + 110, py + 24, 10, C4(0.2f, 0.8f, 1.0f, 1), 10);
+    for (i = 0; i < 3; i++) { /* секретные монеты */
+      disc(px + pw - 160 + i * 52, py + 26, 20, C4(0.05f, 0.06f, 0.12f, 1), 14);
+      disc(px + pw - 160 + i * 52, py + 26, 17, C4(0.55f, 0.57f, 0.60f, 1), 14);
+      adisc(px + pw - 160 + i * 52, py + 26, 10, 90, 450, C4(0.35f, 0.37f, 0.40f, 1), 5);
+    }
+
+    textol("NORMAL MODE", cx, py - 50, 20, C4(1, 1, 1, 1));
+    rrect(px, py - 46, pw, 40, 18, C4(0.02f, 0.06f, 0.25f, 1), C4(0, 0, 0, 0), 0);
+    if (L->best > 0) rrs(px + 4, py - 42, (pw - 8) * L->best / 100.0f, 32, 14, C4(0.35f, 0.9f, 0.2f, 1));
+    fmti(b, "", L->best, "%");
+    textol(b, cx, py - 40, 18, C4(1, 1, 1, 1));
+    breg(e, 20, px, py - 46, pw, 40);
+
+    textol("PRACTICE MODE", cx, py - 120, 20, C4(1, 1, 1, 1));
+    rrect(px, py - 116, pw, 40, 18, C4(0.02f, 0.06f, 0.25f, 1), C4(0, 0, 0, 0), 0);
+    if (e->pb[e->page] > 0) rrs(px + 4, py - 112, (pw - 8) * e->pb[e->page] / 100.0f, 32, 14, C4(0.2f, 0.9f, 0.6f, 1));
+    fmti(b, "", e->pb[e->page], "%");
+    textol(b, cx, py - 110, 18, C4(1, 1, 1, 1));
+    breg(e, 21, px, py - 116, pw, 40);
+
+    if (e->tdown && !e->moved) {
+      if (hit(20, e, e->tx, e->ty)) { gd_start(g, e->page, 0); e->popup = 0; }
+      else if (hit(21, e, e->tx, e->ty)) { gd_start(g, e->page, 1); e->popup = 0; }
+    }
+    /* точки-страницы внизу */
+    for (i = 0; i < g->nlv; i++)
+      disc(cx + (i - (g->nlv - 1) * 0.5f) * 36, 40, i == e->page ? 9 : 7,
+           i == e->page ? C4(1, 1, 1, 1) : C4(0.5f, 0.5f, 0.55f, 1), 12);
+    page_arrows(e);
+  } else {
+    /* ---- страница своего уровня (Create) ---- */
+    float pw = 860, px = cx - pw * 0.5f;
+    rrect(px, (float)e->H - 130, pw, 76, 12, C4(0.03f, 0.15f, 0.45f, 1), C4(0, 0, 0, 0), 0);
+    textol(L->name, cx, (float)e->H - 106, 30, C4(0.75f, 0.85f, 1.0f, 1));
+    rrect(px, (float)e->H - 260, pw, 100, 12, C4(0.03f, 0.15f, 0.45f, 1), C4(0, 0, 0, 0), 0);
+    textsh("DESCRIPTION [OPTIONAL]", cx, (float)e->H - 226, 18, C4(0.55f, 0.7f, 0.9f, 1));
+
+    /* edit / play / share */
+    if (rbtn(e, 22, cx - 230, (float)e->H * 0.45f, 62, C4(0.42f, 0.80f, 0.20f, 1))) {
+      gd_ed_init(g, e->page, GD_TOOL_BUILD, 0); gd_scr(g, GD_SCR_EDITOR);
+    }
+    srq(cx - 244, (float)e->H * 0.45f + 10, 74, 15, -45, C4(0.10f, 0.55f, 0.75f, 1));
+    srq(cx - 216, (float)e->H * 0.45f + 10, 74, 15, 45, C4(0.85f, 0.65f, 0.10f, 1));
+    if (rbtn(e, 20, cx, (float)e->H * 0.45f, 62, C4(0.42f, 0.80f, 0.20f, 1))) {
+      gd_start(g, e->page, 0); e->popup = 0;
+    }
+    tri(cx - 22, (float)e->H * 0.45f - 34, cx - 22, (float)e->H * 0.45f + 34, cx + 34, (float)e->H * 0.45f, C4(1.0f, 0.80f, 0.10f, 1));
+    if (rbtn(e, 28, cx + 230, (float)e->H * 0.45f, 62, C4(0.42f, 0.80f, 0.20f, 1))) {
+      if (g->loggedIn) { scat(L->author, "", g->acc[g->curAcc].name); say(e, "LEVEL PUBLISHED (LOCAL)"); }
+      else e->popup = 3;
+    }
+    srq(cx + 226, (float)e->H * 0.45f, 60, 16, 20, C4(0.95f, 0.45f, 0.45f, 1));
+    tri(cx + 246, (float)e->H * 0.45f + 26, cx + 246, (float)e->H * 0.45f + 2,
+        cx + 262, (float)e->H * 0.45f + 18, C4(0.95f, 0.45f, 0.45f, 1));
+
+    textsh("TINY", cx - 300, 120, 16, C4(0.8f, 0.8f, 0.85f, 1));
+    disc(cx - 350, 128, 14, C4(0.7f, 0.7f, 0.75f, 1), 12);
+    textsh("STEREO MADNESS", cx, 120, 16, C4(0.8f, 0.8f, 0.85f, 1));
+    textsh("UNVERIFIED", cx + 300, 120, 16, C4(0.8f, 0.8f, 0.85f, 1));
+    disc(cx + 240, 128, 14, C4(0.15f, 0.70f, 0.85f, 1), 12);
+    textol("VERSION: 1", cx - 150, 40, 16, C4(1.0f, 0.85f, 0.2f, 1));
+    textol("ID: NA", cx + 150, 40, 16, C4(1.0f, 0.85f, 0.2f, 1));
+
+    /* правая колонка */
+    if (rbtn(e, 23, (float)e->W - 80, (float)e->H - 80, 42, C4(0.42f, 0.80f, 0.20f, 1))) {
+      gd_scr(g, GD_SCR_LEVELS);
+    }
+    srq((float)e->W - 92, (float)e->H - 68, 40, 12, 45, C4(0.85f, 0.25f, 0.15f, 1));
+    srq((float)e->W - 68, (float)e->H - 68, 40, 12, -45, C4(0.85f, 0.25f, 0.15f, 1));
+    if (rbtn(e, 27, (float)e->W - 80, (float)e->H - 190, 42, C4(0.42f, 0.80f, 0.20f, 1)))
+      say(e, "HELP: BUILD IN EDITOR, THEN PLAY");
+    textol("HELP", (float)e->W - 80, (float)e->H - 204, 14, C4(1, 1, 1, 1));
+    if (rbtn(e, 29, (float)e->W - 80, (float)e->H - 300, 42, C4(0.42f, 0.80f, 0.20f, 1))) {
+      e->sub = 1; gd_scr(g, GD_SCR_LEVELS);
+    }
+    rrs((float)e->W - 100, (float)e->H - 312, 40, 26, 4, C4(0.95f, 0.75f, 0.20f, 1));
+  }
+}
+
+/* ------------------------------------------------------------- гараж */
 
 static void draw_garage(Eng *e)
 {
@@ -818,13 +1124,26 @@ static void draw_garage(Eng *e)
   char b[48];
   int i, c1i = 0, c2i = 5, glow = 0, icon = 0;
   C c1 = C4(0.2f, 0.6f, 1.0f, 1), c2 = C4(1.0f, 0.5f, 0.2f, 1);
-  GDPlayer pv;
 
-  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.08f, 0.10f, 0.26f, 1), C4(0.18f, 0.08f, 0.30f, 1));
-  head(e, "ICON KIT");
-  if (button(e, 30, 16.0f, (float)e->H - 62, 84, 48, "< BACK", C4(0.25f, 0.35f, 0.65f, 1),
-             C4(1, 1, 1, 1), 14))
-    gd_scr(g, GD_SCR_MENU);
+  vgrad(0, 0, (float)e->W, (float)e->H, C4(0.52f, 0.53f, 0.55f, 1), C4(0.66f, 0.67f, 0.70f, 1));
+  {
+    int k;
+    for (k = 0; k < 20; k++)
+      quad((float)((k * 173) % e->W), (float)((k * 131) % e->H), 70, 50, C4(0, 0, 0, 0.05f));
+  }
+
+  /* назад (розовая стрелка) */
+  if (rbtn(e, 30, 60, (float)e->H - 60, 42, C4(0.90f, 0.45f, 0.85f, 1))) gd_scr(g, GD_SCR_MENU);
+  tri(78, (float)e->H - 84, 78, (float)e->H - 36, 38, (float)e->H - 60, C4(1, 1, 1, 0.9f));
+
+  /* вывеска магазина */
+  srq(300, (float)e->H - 130, 150, 60, -6, C4(0.72f, 0.45f, 0.15f, 1));
+  textol("THE SHOP", 300, (float)e->H - 146, 18, C4(1.0f, 0.85f, 0.2f, 1));
+  quad(296, (float)e->H - 60, 6, 60, C4(0.80f, 0.65f, 0.30f, 1));
+
+  textol("PLAYER", cx, (float)e->H - 100, 34, C4(1, 1, 1, 1));
+  textsh("WHAT'S YOUR NAME?", cx + 330, (float)e->H - 90, 14, C4(1, 1, 1, 0.9f));
+  if (rbtn(e, 34, cx + 380, (float)e->H - 130, 20, C4(0, 0, 0, 0))) gd_scr(g, GD_SCR_ACCOUNT);
 
   if (acc >= 0) {
     c1i = g->acc[acc].c1; c2i = g->acc[acc].c2; glow = g->acc[acc].glow;
@@ -832,50 +1151,156 @@ static void draw_garage(Eng *e)
   }
   c1 = PALETTE[c1i % 12]; c2 = PALETTE[c2i % 12];
 
-  /* вкладки режимов */
-  for (i = 0; i < GD_MODE_N; i++) {
-    float x = cx - (GD_MODE_N * 62) * 0.5f + i * 62;
-    if (button(e, 200 + i, x, (float)e->H - 130, 56, 40, gd_mode_en(i),
-               e->garageMode == i ? C4(0.30f, 0.60f, 1.0f, 1) : C4(0.20f, 0.25f, 0.45f, 1),
-               C4(1, 1, 1, 1), 10))
-      e->garageMode = i;
+  /* большое превью иконки */
+  rrect(cx - 70, (float)e->H - 260, 140, 140, 6, c1, C4(0.05f, 0.06f, 0.12f, 1), 5);
+  rrect(cx - 40, (float)e->H - 230, 80, 80, 4, C4(0.05f, 0.06f, 0.12f, 1), C4(0, 0, 0, 0), 0);
+  rrect(cx - 22, (float)e->H - 212, 44, 44, 3, c2, C4(0, 0, 0, 0), 0);
+
+  /* валюты справа */
+  {
+    int v[7] = { 0, 0, 0, 0, 0, 0, 0 };
+    const char *nm[7] = { "ST", "MO", "DS", "CO", "OR", "DI", "SH" };
+    if (acc >= 0) {
+      v[0] = g->acc[acc].stars; v[3] = g->acc[acc].coins; v[4] = g->acc[acc].orbs;
+      v[5] = g->acc[acc].diamonds; v[2] = g->acc[acc].demons;
+    }
+    for (i = 0; i < 7; i++) {
+      float y = (float)e->H - 60 - i * 44;
+      C cc = i == 4 ? C4(0.2f, 0.8f, 1.0f, 1) : i == 5 ? C4(0.3f, 0.8f, 1.0f, 1)
+             : i == 0 ? C4(1.0f, 0.8f, 0.2f, 1) : C4(0.8f, 0.8f, 0.85f, 1);
+      fmti(b, "", v[i], "");
+      textol(b, (float)e->W - 120, y, 16, C4(1, 1, 1, 1));
+      disc((float)e->W - 60, y + 8, 12, cc, 12);
+      (void)nm;
+    }
   }
 
-  /* превью */
-  memset(&pv, 0, sizeof pv);
-  pv.x = CX + 4.5f; pv.y = CY + 3.0f; pv.mode = e->garageMode; pv.rot = 0;
-  pv.mini = 0;
-  quad(PXf(pv.x) - 90, PYf(pv.y) - 90, 180, 180, C4(0, 0, 0, 0.25f));
-  draw_player(e, &pv, c1, c2, glow);
+  /* кнопки палитры слева */
+  if (rbtn(e, 35, 70, (float)e->H - 240, 36, C4(0.85f, 0.85f, 0.88f, 1))) { e->colpop = 1; e->coltab = 0; }
+  for (i = 0; i < 6; i++)
+    adisc(70, (float)e->H - 240, 26, i * 60, i * 60 + 40, PALETTE[i + 2], 3);
+  if (rbtn(e, 36, 70, (float)e->H - 340, 36, C4(0.95f, 0.75f, 0.20f, 1))) { e->colpop = 1; e->coltab = 1; }
+  for (i = 0; i < 5; i++) disc(58 + (i % 3) * 12, (float)e->H - 352 + (i / 3) * 12, 6, PALETTE[i], 8);
 
-  fmti(b, "ICON ", icon + 1, "");
-  textsh(b, cx, (float)e->H - 300, 16, C4(1, 1, 1, 0.9f));
-  if (button(e, 31, cx - 150, (float)e->H - 320, 60, 40, "<", C4(0.25f, 0.35f, 0.65f, 1),
-             C4(1, 1, 1, 1), 16) && acc >= 0)
+  /* ряд режимов */
+  for (i = 0; i < GD_MODE_N + 2; i++) {
+    float x = cx - ((GD_MODE_N + 2) * 76) * 0.5f + i * 76 + 38;
+    int sel = i == e->garageMode;
+    if (i < GD_MODE_N) {
+      if (rbtn(e, 200 + i, x, (float)e->H - 420, 30, sel ? C4(0.16f, 0.72f, 0.75f, 1) : C4(0.62f, 0.63f, 0.66f, 1)))
+        e->garageMode = i;
+      modeic(x, (float)e->H - 420, 16, i, C4(0.1f, 0.1f, 0.12f, 1), C4(0.1f, 0.1f, 0.12f, 1));
+    } else {
+      rbtn(e, 200 + i, x, (float)e->H - 420, 30, C4(0.62f, 0.63f, 0.66f, 1));
+      lockic(x, (float)e->H - 420, 24);
+    }
+  }
+  textsh("TAP (LOCK) FOR MORE INFO!", cx, (float)e->H - 470, 14, C4(1, 1, 1, 0.95f));
+  lockic(cx - 96, (float)e->H - 476, 16);
+
+  /* сетка иконок: 12 вариантов + замок для остальных */
+  for (i = 0; i < 36; i++) {
+    float x = cx - 6 * 62 + (i % 12) * 62;
+    float y = (float)e->H - 640 + (2 - i / 12) * 62;
+    int unlocked = i < 12;
+    if (unlocked) {
+      rrect(x, y, 52, 52, 6, C4(0.75f, 0.76f, 0.78f, 1),
+            icon == i ? C4(1, 1, 1, 1) : C4(0.2f, 0.2f, 0.22f, 1), icon == i ? 4 : 2);
+      iconart(x + 26, y + 26, i, C4(0.2f, 0.2f, 0.25f, 1));
+      if (acc >= 0 && e->tdown && e->tx >= x && e->tx <= x + 52 && e->ty >= y && e->ty <= y + 52)
+        g->acc[acc].icon[e->garageMode] = i;
+      breg(e, 300 + i, x, y, 52, 52);
+    } else {
+      rrs(x, y, 52, 52, 6, C4(0.30f, 0.31f, 0.33f, 1));
+      lockic(x + 26, y + 26, 26);
+    }
+  }
+  /* стрелки листания */
+  if (rbtn(e, 31, 110, (float)e->H - 610, 34, C4(0.42f, 0.80f, 0.20f, 1)) && acc >= 0)
     g->acc[acc].icon[e->garageMode] = (icon + 11) % 12;
-  if (button(e, 32, cx + 90, (float)e->H - 320, 60, 40, ">", C4(0.25f, 0.35f, 0.65f, 1),
-             C4(1, 1, 1, 1), 16) && acc >= 0)
+  tri(124, (float)e->H - 628, 124, (float)e->H - 592, 96, (float)e->H - 610, C4(0.8f, 0.95f, 0.5f, 1));
+  if (rbtn(e, 32, (float)e->W - 110, (float)e->H - 610, 34, C4(0.42f, 0.80f, 0.20f, 1)) && acc >= 0)
     g->acc[acc].icon[e->garageMode] = (icon + 1) % 12;
+  tri((float)e->W - 124, (float)e->H - 628, (float)e->W - 124, (float)e->H - 592,
+      (float)e->W - 96, (float)e->H - 610, C4(0.8f, 0.95f, 0.5f, 1));
 
-  /* палитры */
-  for (i = 0; i < 12; i++) {
-    float x = cx - 12 * 34 * 0.5f + i * 34;
-    if (button(e, 300 + i, x, (float)e->H - 400, 30, 30, "", PALETTE[i], C4(1, 1, 1, 1), 10) &&
-        acc >= 0)
-      g->acc[acc].c1 = i;
-    if (button(e, 340 + i, x, (float)e->H - 440, 30, 30, "", PALETTE[i], C4(1, 1, 1, 1), 10) &&
-        acc >= 0)
-      g->acc[acc].c2 = i;
+  if (acc < 0) textsh("LOG IN TO SAVE ICONS", cx, 40, 14, C4(0.9f, 0.6f, 0.2f, 1));
+
+  if (e->colpop) draw_colpop(e, acc, c1i, c2i, glow);
+}
+
+/* попап выбора цветов (Col1/Col2/Glow) как в GD */
+static void draw_colpop(Eng *e, int acc, int c1i, int c2i, int glow)
+{
+  GDGame *g = &e->g;
+  float w = (float)e->W - 200, h = (float)e->H - 140;
+  float x = 100, y = 70;
+  int i;
+
+  quad(0, 0, (float)e->W, (float)e->H, C4(0, 0, 0, 0.5f));
+  rrect(x, y, w, h, 14, C4(0.16f, 0.17f, 0.19f, 1), C4(0.85f, 0.85f, 0.88f, 1), 3);
+
+  if (rbtn(e, 38, x + 40, y + h - 40, 34, C4(0.42f, 0.80f, 0.20f, 1))) e->colpop = 0;
+  srq(x + 30, y + h - 30, 40, 12, 45, C4(1.0f, 0.85f, 0.2f, 1));
+  srq(x + 50, y + h - 30, 40, 12, -45, C4(1.0f, 0.85f, 0.2f, 1));
+
+  if (gbtn(e, 39, x + w - 340, y + h - 60, 100, 36, "COL1", 14) ) e->coltab = 0;
+  if (gbtn(e, 40, x + w - 230, y + h - 60, 100, 36, "COL2", 14)) e->coltab = 1;
+  if (gbtn(e, 41, x + w - 120, y + h - 60, 100, 36, "GLOW", 14)) e->coltab = 2;
+  (void)c1i; (void)c2i;
+
+  /* ряд иконок режимов с текущими цветами */
+  rrs(x + 40, y + h - 160, w - 80, 90, 8, C4(0.24f, 0.25f, 0.27f, 1));
+  for (i = 0; i < GD_MODE_N; i++) {
+    float mx = x + 90 + i * (w - 160) / (GD_MODE_N - 1);
+    modeic(mx, y + h - 115, 26, i,
+           PALETTE[(acc >= 0 ? g->acc[acc].c1 : 1) % 12],
+           PALETTE[(acc >= 0 ? g->acc[acc].c2 : 5) % 12]);
   }
-  textL("PRIMARY", cx - 12 * 34 * 0.5f, (float)e->H - 372, 12, C4(1, 1, 1, 0.8f));
-  textL("SECONDARY", cx - 12 * 34 * 0.5f, (float)e->H - 412, 12, C4(1, 1, 1, 0.8f));
 
-  if (acc >= 0) {
-    if (button(e, 33, cx - 90, 60, 180, 46, glow ? "GLOW: ON" : "GLOW: OFF",
-               C4(0.35f, 0.45f, 0.80f, 1), C4(1, 1, 1, 1), 14))
+  if (e->coltab == 2) {
+    if (acc >= 0 && gbtn(e, 42, x + w * 0.5f - 120, y + h * 0.4f, 240, 60,
+                         glow ? "GLOW: ON" : "GLOW: OFF", 20))
       g->acc[acc].glow = !g->acc[acc].glow;
-  } else {
-    textsh("LOG IN TO SAVE ICONS", cx, 70, 14, C4(1, 0.8f, 0.4f, 1));
+    return;
+  }
+
+  /* сетка цветов */
+  for (i = 0; i < 12; i++) {
+    float sx = x + 60 + (i % 6) * 70;
+    float sy = y + h - 260 - (i / 6) * 70;
+    int cur = (e->coltab == 0 ? (acc >= 0 ? g->acc[acc].c1 : 0) : (acc >= 0 ? g->acc[acc].c2 : 5));
+    rrect(sx, sy, 56, 56, 6, PALETTE[i], cur == i ? C4(1, 1, 1, 1) : C4(0.05f, 0.05f, 0.06f, 1), cur == i ? 4 : 2);
+    if (acc >= 0 && e->tdown && e->tx >= sx && e->tx <= sx + 56 && e->ty >= sy && e->ty <= sy + 56) {
+      if (e->coltab == 0) g->acc[acc].c1 = i; else g->acc[acc].c2 = i;
+    }
+    breg(e, 320 + i, sx, sy, 56, 56);
+  }
+}
+
+/* пиктограмма режима */
+static void modeic(float cx, float cy, float r, int mode, C a, C b2)
+{
+  switch (mode) {
+    case GD_CUBE: rrect(cx - r, cy - r, 2 * r, 2 * r, 3, a, b2, 0); rrect(cx - r * 0.4f, cy - r * 0.4f, r * 0.8f, r * 0.8f, 2, b2, a, 0); break;
+    case GD_SHIP: quad(cx - r, cy - r * 0.2f, 2 * r, r * 0.6f, a); tri(cx - r * 0.4f, cy - r * 0.2f, cx + r * 0.4f, cy - r * 0.2f, cx, cy + r * 0.7f, b2); break;
+    case GD_BALL: disc(cx, cy, r, a, 14); quad(cx - r, cy - 1, 2 * r, 2, b2); break;
+    case GD_UFO: adisc(cx, cy, r, 0, 180, a, 10); quad(cx - r, cy - r * 0.2f, 2 * r, r * 0.4f, b2); break;
+    case GD_WAVE: tri(cx + r, cy, cx - r * 0.6f, cy + r * 0.7f, cx - r * 0.6f, cy - r * 0.7f, a); break;
+    case GD_ROBOT: rrect(cx - r * 0.7f, cy - r, r * 1.4f, r * 1.6f, 2, a, b2, 0); quad(cx - r * 0.3f, cy - r * 0.6f, r * 0.6f, r * 0.3f, b2); break;
+    case GD_SPIDER: disc(cx, cy, r * 0.7f, a, 10); srq(cx - r, cy, r, 3, 40, a); srq(cx + r, cy, r, 3, -40, a); break;
+    default: tri(cx + r, cy, cx - r, cy + r * 0.6f, cx - r, cy - r * 0.6f, a); break;
+  }
+}
+
+/* узор варианта иконки */
+static void iconart(float cx, float cy, int v, C c)
+{
+  switch (v % 4) {
+    case 0: rrect(cx - 14, cy - 14, 28, 28, 3, c, C4(0, 0, 0, 0), 0); rrect(cx - 6, cy - 6, 12, 12, 2, C4(0.8f, 0.8f, 0.85f, 1), C4(0, 0, 0, 0), 0); break;
+    case 1: rrect(cx - 14, cy - 14, 28, 28, 3, c, C4(0, 0, 0, 0), 0); quad(cx - 8, cy + 2, 6, 8, C4(0.8f, 0.8f, 0.85f, 1)); quad(cx + 2, cy + 2, 6, 8, C4(0.8f, 0.8f, 0.85f, 1)); break;
+    case 2: rrect(cx - 14, cy - 14, 28, 28, 3, c, C4(0, 0, 0, 0), 0); quad(cx - 3, cy - 10, 6, 20, C4(0.8f, 0.8f, 0.85f, 1)); break;
+    default: rrect(cx - 14, cy - 14, 28, 28, 3, c, C4(0, 0, 0, 0), 0); quad(cx - 9, cy - 2, 18, 4, C4(0.8f, 0.8f, 0.85f, 1)); break;
   }
 }
 
@@ -1041,13 +1466,28 @@ static void draw_editor(Eng *e)
     draw_obj(e, o, g->t);
   }
   /* сетка */
-  {
+  if (e->eflags & 1) {
     float x0 = (float)(int)CX - 1, x1 = CX + w / SC + 1;
     float wx, wy;
     for (wx = x0; wx < x1; wx += 1.0f)
       quad(PXf(wx), 0, 1.0f, h, C4(1, 1, 1, 0.05f));
     for (wy = -2; wy < 14; wy += 1.0f)
       quad(0, PYf(wy), w, 1.0f, C4(1, 1, 1, 0.05f));
+  }
+  /* хитбоксы опасностей */
+  if (e->eflags & 2) {
+    for (i = 0; i < L->nobj; i++) {
+      const GDObj *ob = &L->o[i];
+      const GDInfo *in = gd_info(ob->id);
+      float x, y, ow, oh;
+      if (!in || (in->kind != 1 && in->kind != 3)) continue;
+      x = PXf(ob->x + ob->ox); y = PYf(ob->y + ob->oy);
+      ow = ob->w * ob->sx * SC; oh = ob->h * ob->sy * SC;
+      quad(x, y, ow, 2, C4(1, 0.2f, 0.2f, 0.8f));
+      quad(x, y + oh - 2, ow, 2, C4(1, 0.2f, 0.2f, 0.8f));
+      quad(x, y, 2, oh, C4(1, 0.2f, 0.2f, 0.8f));
+      quad(x + ow - 2, y, 2, oh, C4(1, 0.2f, 0.2f, 0.8f));
+    }
   }
   /* выделение */
   for (i = 0; i < g->nsel; i++) {
@@ -1092,7 +1532,13 @@ static void draw_editor(Eng *e)
                         C4(1, 1, 1, 1), 12))
     gd_ed_group_sel(g, g->curGroup);
   fmti(b, "OBJ ", L->nobj, "");
-  textsh(b, w - 90, h - 34, 14, C4(1, 1, 1, 0.9f));
+  textsh(b, w - 260, h - 34, 14, C4(1, 1, 1, 0.9f));
+  /* шестерня и пауза справа, как в GD */
+  if (rbtn(e, 906, w - 150, h - 28, 24, C4(0.30f, 0.70f, 0.20f, 1))) e->popup = 2;
+  ring(w - 150, h - 28, 9, 16, C4(0.90f, 0.65f, 0.10f, 1), 10);
+  if (rbtn(e, 907, w - 60, h - 28, 24, C4(0.30f, 0.70f, 0.20f, 1))) e->popup = 2;
+  quad(w - 70, h - 42, 8, 26, C4(1, 1, 1, 1));
+  quad(w - 56, h - 42, 8, 26, C4(1, 1, 1, 1));
 
   /* инструменты */
   quad(0, palH + tabH, w, 40, C4(0, 0, 0, 0.40f));
@@ -1230,30 +1676,74 @@ static void draw_popup(Eng *e)
 static void draw_pause(Eng *e)
 {
   GDGame *g = &e->g;
-  float cx = (float)e->W * 0.5f, w = 320, h = 58, y = (float)e->H * 0.62f;
+  float cx = (float)e->W * 0.5f, w = 340, h = 58, y = (float)e->H * 0.62f;
 
   quad(0, 0, (float)e->W, (float)e->H, C4(0, 0, 0, 0.6f));
-  textsh("PAUSED", cx, (float)e->H * 0.72f, 30, C4(1, 1, 1, 1));
-  if (button(e, 910, cx - w * 0.5f, y, w, h, "RESUME", C4(0.25f, 0.60f, 0.95f, 1),
-             C4(1, 1, 1, 1), 18))
-    e->popup = 0;
+  textol("PAUSED", cx, (float)e->H * 0.74f, 30, C4(1, 1, 1, 1));
+  if (gbtn(e, 910, cx - w * 0.5f, y, w, h, "RESUME", 20)) e->popup = 0;
+  y -= h + 14;
+  if (gbtn(e, 911, cx - w * 0.5f, y, w, h, "RESTART", 20)) {
+    gd_start(g, g->cur, g->practice); e->popup = 0;
+  }
+  y -= h + 14;
+  if (gbtn(e, 912, cx - w * 0.5f, y, w, h, g->practice ? "PRACTICE: ON" : "PRACTICE: OFF", 16)) {
+    gd_start(g, g->cur, !g->practice); e->popup = 0;
+  }
+  y -= h + 14;
+  if (gbtn(e, 913, cx - w * 0.5f, y, w, h, "EXIT", 20)) { e->popup = 0; gd_scr(g, GD_SCR_MENU); }
+}
+
+/* попап "нужен аккаунт" как в GD */
+static void draw_accneed(Eng *e)
+{
+  float w = 620, h = 330, x = ((float)e->W - w) * 0.5f, y = ((float)e->H - h) * 0.5f;
+  quad(0, 0, (float)e->W, (float)e->H, C4(0, 0, 0, 0.5f));
+  rrect(x, y, w, h, 12, C4(0.03f, 0.12f, 0.30f, 1), C4(0.85f, 0.87f, 0.92f, 1), 5);
+  disc(x + 6, y + 6, 10, C4(0.85f, 0.87f, 0.92f, 1), 10);
+  disc(x + w - 6, y + 6, 10, C4(0.85f, 0.87f, 0.92f, 1), 10);
+  disc(x + 6, y + h - 6, 10, C4(0.85f, 0.87f, 0.92f, 1), 10);
+  disc(x + w - 6, y + h - 6, 10, C4(0.85f, 0.87f, 0.92f, 1), 10);
+  textol("ACCOUNT NEEDED", x + w * 0.5f, y + h - 70, 26, C4(1.0f, 0.85f, 0.2f, 1));
+  textsh("YOU NEED AN ACCOUNT TO SHARE LEVELS.", x + w * 0.5f, y + h - 130, 15, C4(1, 1, 1, 1));
+  textsh("CREATE ONE FOR FREE FROM THE", x + w * 0.5f, y + h - 158, 15, C4(1, 1, 1, 1));
+  textsh("ACCOUNT SCREEN IN MAIN MENU.", x + w * 0.5f, y + h - 186, 15, C4(1, 1, 1, 1));
+  if (gbtn(e, 930, x + w * 0.5f - 90, y + 30, 180, 54, "CLOSE", 20)) e->popup = 0;
+}
+
+/* пауза редактора как в GD (Resume/Save and Play/...) + чекбоксы */
+static void draw_edpause(Eng *e)
+{
+  GDGame *g = &e->g;
+  float cx = (float)e->W * 0.5f, w = 400, h = 56, y = (float)e->H * 0.80f;
+  static const char *CB[4] = { "SHOW GRID", "SHOW HITBOXES", "SHOW GROUND", "IGNORE DAMAGE" };
+  int i;
+
+  quad(0, 0, (float)e->W, (float)e->H, C4(0, 0, 0, 0.6f));
+  if (gbtn(e, 940, cx - w * 0.5f, y, w, h, "RESUME", 20)) e->popup = 0;
   y -= h + 12;
-  if (button(e, 911, cx - w * 0.5f, y, w, h, "RESTART", C4(0.30f, 0.65f, 0.40f, 1),
-             C4(1, 1, 1, 1), 18)) {
-    gd_start(g, g->cur, g->practice);
-    e->popup = 0;
+  if (gbtn(e, 941, cx - w * 0.5f, y, w, h, "SAVE AND PLAY", 20)) {
+    save_store(e); gd_start(g, g->cur, 0); e->popup = 0;
   }
   y -= h + 12;
-  if (button(e, 912, cx - w * 0.5f, y, w, h, g->practice ? "PRACTICE: ON" : "PRACTICE: OFF",
-             C4(0.40f, 0.45f, 0.75f, 1), C4(1, 1, 1, 1), 16)) {
-    gd_start(g, g->cur, !g->practice);
-    e->popup = 0;
+  if (gbtn(e, 942, cx - w * 0.5f, y, w, h, "SAVE AND EXIT", 20)) {
+    save_store(e); e->popup = 0; gd_scr(g, GD_SCR_MENU);
   }
   y -= h + 12;
-  if (button(e, 913, cx - w * 0.5f, y, w, h, "EXIT", C4(0.65f, 0.30f, 0.30f, 1),
-             C4(1, 1, 1, 1), 18)) {
-    e->popup = 0;
-    gd_scr(g, GD_SCR_MENU);
+  if (gbtn(e, 943, cx - w * 0.5f, y, w, h, "SAVE", 20)) { save_store(e); say(e, "LEVEL SAVED"); }
+  y -= h + 12;
+  if (gbtn(e, 944, cx - w * 0.5f, y, w, h, "EXIT", 20)) { e->popup = 0; gd_scr(g, GD_SCR_MENU); }
+
+  for (i = 0; i < 4; i++) {
+    float cy = (float)e->H * 0.80f - i * 56;
+    float bx = 60;
+    int on = e->eflags & (1 << i);
+    rrs(bx, cy + 8, 34, 34, 5, on ? C4(0.4f, 0.9f, 0.4f, 1) : C4(0.55f, 0.56f, 0.58f, 1));
+    rrect(bx, cy + 8, 34, 34, 5, C4(0, 0, 0, 0), C4(0.1f, 0.1f, 0.12f, 1), 2);
+    if (on) { srq(bx + 12, cy + 24, 22, 6, 45, C4(0.1f, 0.5f, 0.1f, 1));
+              srq(bx + 22, cy + 28, 30, 6, -50, C4(0.1f, 0.5f, 0.1f, 1)); }
+    textol(CB[i], bx + 56, cy + 16, 15, C4(1, 1, 1, 1));
+    breg(e, 950 + i, bx, cy + 8, 260, 34);
+    if (e->tdown && hit(950 + i, e, e->tx, e->ty)) e->eflags ^= (1 << i);
   }
 }
 
@@ -1315,7 +1805,9 @@ static void render(Eng *e)
   }
 
   if (g->screen == GD_SCR_GAME && e->popup == 2) draw_pause(e);
+  if (g->screen == GD_SCR_EDITOR && e->popup == 2) draw_edpause(e);
   if (g->screen == GD_SCR_EDITOR && e->popup == 1) draw_popup(e);
+  if (e->popup == 3) draw_accneed(e);
 
   if (e->msgT > 0.0f) {
     quad(0, 0, (float)e->W, 40, C4(0, 0, 0, 0.55f));
@@ -1634,6 +2126,8 @@ void android_main(struct android_app *state)
 
   memset(&e, 0, sizeof e);
   e.app = state;
+  e.eflags = 1;               /* сетка редактора включена по умолчанию */
+  e.zoomf = 1.0f;
   e.dpy = EGL_NO_DISPLAY;
   e.surf = EGL_NO_SURFACE;
   e.ctx = EGL_NO_CONTEXT;
