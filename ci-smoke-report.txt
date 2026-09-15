@@ -1,0 +1,134 @@
+run=35022828886
+--- pm path ---
+package:/data/app/~~aAi54WrW00m7l1BQ6XzOsw==/com.derka.gd-R7CxDDnNiJ1enSg2vEUWtQ==/base.apk
+--- dumpsys package (abi) ---
+    codePath=/data/app/~~aAi54WrW00m7l1BQ6XzOsw==/com.derka.gd-R7CxDDnNiJ1enSg2vEUWtQ==
+    versionName=2.0
+--- pids ---
+t=2s pid=2234
+t=4s pid=2234
+t=6s pid=2234
+t=8s pid=2234
+t=10s pid=2234
+t=12s pid=2234
+t=14s pid=2234
+t=16s pid=2234
+t=18s pid=2234
+t=20s pid=2234
+--- am start ---
+Starting: Intent { cmp=com.derka.gd/android.app.NativeActivity }
+Status: ok
+LaunchState: COLD
+Activity: com.derka.gd/android.app.NativeActivity
+TotalTime: 15292
+WaitTime: 15832
+Complete
+--- derka/AM/crash lines ---
+09-15 21:07:50.642 W/system_server(  543): Long monitor contention with owner pool-20-thread-1 (2181) at android.content.Intent com.android.server.am.ActivityManagerService.registerReceiverWithFeature(android.app.IApplicationThread, java.lang.String, java.lang.String, java.lang.String, android.content.IIntentReceiver, android.content.IntentFilter, java.lang.String, int, int)(ActivityManagerService.java:13940) waiters=0 in android.content.Intent com.android.server.am.ActivityManagerService.registerReceiverWithFeature(android.app.IApplicationThread, java.lang.String, java.lang.String, java.lang.String, android.content.IIntentReceiver, android.content.IntentFilter, java.lang.String, int, int) for 1.600s
+09-15 21:07:50.855 D/ActivityManager(  543): sync unfroze 1826 com.android.localtransport for 10
+09-15 21:07:51.032 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.ActivityManagerService.tempAllowlistUidLocked(int, long, int, java.lang.String, int, int)(ActivityManagerService.java:16672) waiters=0 in void com.android.server.am.ActivityManagerService.appendDropBoxProcessHeaders(com.android.server.am.ProcessRecord, java.lang.String, java.lang.StringBuilder) for 267ms
+09-15 21:07:51.141 D/ActivityManager(  543): sync unfroze 2004 com.android.quicksearchbox for 3
+09-15 21:07:52.321 W/ActivityTaskManager(  543): callingPackage for (uid=2000, pid=2208) has no WPC
+09-15 21:07:52.975 V/SplashScreenExceptionList(  543): SplashScreen checking exception for package com.derka.gd (target sdk:35) -> false
+09-15 21:07:53.048 W/ll.splashscreen(  949): type=1400 audit(0.0:14): avc:  denied  { read } for  name="u:object_r:incremental_prop:s0" dev="tmpfs" ino=204 scontext=u:r:platform_app:s0:c512,c768 tcontext=u:object_r:incremental_prop:s0 tclass=file permissive=0 app=com.android.systemui
+09-15 21:07:53.048 W/ll.splashscreen(  949): type=1400 audit(0.0:15): avc:  denied  { read } for  name="filesystems" dev="proc" ino=4026532076 scontext=u:r:platform_app:s0:c512,c768 tcontext=u:object_r:proc_filesystems:s0 tclass=file permissive=0 app=com.android.systemui
+09-15 21:07:53.247 I/ActivityTaskManager(  543): START u0 {flg=0x10000000 cmp=com.derka.gd/android.app.NativeActivity} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+09-15 21:07:53.251 V/WindowManagerShell(  949): Transition requested: android.os.BinderProxy@e1611a4 TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=8 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.derka.gd/android.app.NativeActivity } baseActivity=ComponentInfo{com.derka.gd/android.app.NativeActivity} topActivity=ComponentInfo{com.derka.gd/android.app.NativeActivity} origActivity=null realActivity=ComponentInfo{com.derka.gd/android.app.NativeActivity} numActivities=1 lastActiveTime=490352 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@19dab0d} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=null topActivityInfo=ActivityInfo{34dfac2 android.app.NativeActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isSleeping=false topActivityInSizeCompat=false topActivityEligibleForLetterboxEducation= false topActivityLetterboxed= false isFromDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 locusId=null displayAreaFeatureId=1 cameraCompatControlState=hidden}, remoteTransition = null, displayChange = null }
+09-15 21:07:53.278 W/system_server(  543): Long monitor contention with owner binder:543_7 (1018) at void java.lang.Object.wait(long, int)(Object.java:-2) waiters=0 in void com.android.server.wm.ActivityTaskManagerService$LocalService.onProcessRemoved(java.lang.String, int) for 951ms
+09-15 21:07:53.680 W/ActivityManager(  543): Slow operation: 1364ms so far, now at startProcess: done creating new process record
+09-15 21:07:53.681 W/ActivityManager(  543): Slow operation: 1364ms so far, now at startProcess: stepping in to startProcess
+09-15 21:07:53.683 I/ActivityManager(  543): com.android.devicelockcontroller is exempt from freezer
+09-15 21:07:53.746 D/nativeloader(  949): Configuring clns-7 for other apk . target_sdk_version=35, uses_libraries=, library_path=/data/app/~~aAi54WrW00m7l1BQ6XzOsw==/com.derka.gd-R7CxDDnNiJ1enSg2vEUWtQ==/lib/x86_64:/data/app/~~aAi54WrW00m7l1BQ6XzOsw==/com.derka.gd-R7CxDDnNiJ1enSg2vEUWtQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand
+09-15 21:07:53.823 W/ActivityManager(  543): Slow operation: 1507ms so far, now at startProcess: done starting proc!
+09-15 21:07:53.826 W/ActivityManager(  543): Slow operation: 145ms so far, now at startProcess: asking zygote to start proc
+09-15 21:07:53.869 D/CoreBackPreview(  543): Window{6d17d0 u0 Splash Screen com.derka.gd}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@b53e0fc, mPriority=0, mIsAnimationCallback=false}
+09-15 21:07:54.030 W/ActivityManager(  543): Slow operation: 349ms so far, now at startProcess: returned from zygote!
+09-15 21:07:54.105 W/system_server(  543): Long monitor contention with owner binder:543_8 (1048) at android.content.res.Configuration com.android.server.wm.ActivityTaskManagerService.getGlobalConfigurationForPid(int)(ActivityTaskManagerService.java:1133) waiters=1 in void com.android.server.wm.InputMonitor$UpdateInputWindows.run() for 187ms
+09-15 21:07:54.181 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:559) waiters=1 in android.content.Intent com.android.server.am.ActivityManagerService.registerReceiverWithFeature(android.app.IApplicationThread, java.lang.String, java.lang.String, java.lang.String, android.content.IIntentReceiver, android.content.IntentFilter, java.lang.String, int, int) for 3.439s
+09-15 21:07:54.188 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:559) waiters=2 in int com.android.server.am.ActivityManagerService.broadcastIntentWithFeature(android.app.IApplicationThread, java.lang.String, android.content.Intent, java.lang.String, android.content.IIntentReceiver, int, java.lang.String, android.os.Bundle, java.lang.String[], java.lang.String[], java.lang.String[], int, android.os.Bundle, boolean, boolean, int) for 3.318s
+09-15 21:07:54.225 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:559) waiters=3 in void com.android.server.am.ActivityManagerService.finishReceiver(android.os.IBinder, int, java.lang.String, android.os.Bundle, boolean, int) for 3.270s
+09-15 21:07:54.465 D/ActivityManager(  543): freezing 2057 com.android.keychain
+09-15 21:07:54.497 I/ActivityManager(  543): Killing 1626:com.android.providers.media.module/u0a133 (adj -700): bg anr
+--- crash buffer ---
+--- activity state ---
+ACTIVITY MANAGER ACTIVITIES (dumpsys activity activities)
+Display #0 (activities from top to bottom):
+  * Task{d7b2d6e #8 type=standard A=10141:com.derka.gd U=0 visible=true visibleRequested=true mode=fullscreen translucent=false sz=1}
+    mLastNonFullscreenBounds=Rect(27, 254 - 293, 387)
+    isSleeping=false
+    topResumedActivity=ActivityRecord{9428ce9 u0 com.derka.gd/android.app.NativeActivity t8}
+    * Hist  #0: ActivityRecord{9428ce9 u0 com.derka.gd/android.app.NativeActivity t8}
+      packageName=com.derka.gd processName=com.derka.gd
+      launchedFromUid=2000 launchedFromPackage=com.android.shell launchedFromFeature=null userId=0
+      app=ProcessRecord{1a9b456 2234:com.derka.gd/u0a141}
+      Intent { flg=0x10000000 cmp=com.derka.gd/android.app.NativeActivity }
+      rootOfTask=true task=Task{d7b2d6e #8 type=standard A=10141:com.derka.gd}
+      taskAffinity=10141:com.derka.gd
+      mActivityComponent=com.derka.gd/android.app.NativeActivity
+      baseDir=/data/app/~~aAi54WrW00m7l1BQ6XzOsw==/com.derka.gd-R7CxDDnNiJ1enSg2vEUWtQ==/base.apk
+      dataDir=/data/user/0/com.derka.gd
+      stateNotNeeded=false componentSpecified=false mActivityType=standard
+      compat={160dpi} labelRes=0x0 icon=0x7f020000 theme=0x103000a
+      mLastReportedConfigurations:
+        mGlobalConfig={1.0 ?mcc0mnc [en_US] ldltr sw320dp w640dp h320dp 160dpi nrml long land finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 640, 320) mAppBounds=Rect(0, 0 - 640, 320) mMaxBounds=Rect(0, 0 - 640, 320) mDisplayRotation=ROTATION_90 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_90} s.39 fontWeightAdjustment=0}
+--- live tail ---
+09-15 21:08:48.399 W/Looper  (  543): Slow dispatch took 236ms main h=android.os.Handler c=null m=1
+09-15 21:08:48.548 W/Looper  (  543): Drained
+09-15 21:08:48.584 D/OverviewProxyService(  949): Overview proxy service connected
+09-15 21:08:48.640 D/PinnerService(  543): pinRangeStream: null
+09-15 21:08:48.641 D/PinnerService(  543): pinRangeStream: null
+09-15 21:08:48.648 D/AutofillManagerServiceImpl(  543): Reset component for user 0:null
+09-15 21:08:48.655 D/AutofillManagerServiceImpl(  543): Reset component for user 0:null
+09-15 21:08:48.656 D/FieldClassificationStrategy(  543): reset(): service is not bound. Do nothing.
+09-15 21:08:48.672 D/StylusManager(  949): Stylus InputDevice changed: 9 virtio_input_multi_touch_6
+09-15 21:08:48.684 D/AutofillUI(  543): destroySaveUiUiThread(): already destroyed
+09-15 21:08:48.696 W/Looper  (  543): Drained
+09-15 21:08:48.725 D/AutofillUI(  543): destroySaveUiUiThread(): already destroyed
+09-15 21:08:48.791 D/OverviewProxyService(  949): OverviewProxyService connected, initializing overview proxy
+09-15 21:08:48.820 W/Looper  (  949): Slow dispatch took 227ms wmshell.main h=android.os.Handler c=com.android.wm.shell.common.ShellExecutor$$ExternalSyntheticLambda0@17bcce8 m=0
+09-15 21:08:48.867 W/Looper  (  543): Slow dispatch took 876ms android.fg h=android.os.Handler c=<recycled PooledLambda@375939c> m=0
+09-15 21:08:48.943 D/EGL_emulation( 2234): app_time_stats: avg=75.79ms min=26.16ms max=191.87ms count=13
+09-15 21:08:48.996 D/SatelliteProvider( 2318): onCreate
+09-15 21:08:49.034 W/Looper  (  543): Slow dispatch took 100ms android.fg h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@a99797a m=0
+09-15 21:08:49.251 W/Looper  (  543): Drained
+09-15 21:08:49.384 I/InputReader(  543): Reconfiguring input devices, changes=KEYBOARD_LAYOUTS
+09-15 21:08:49.426 D/TouchInteractionService( 1250): disposeEventHandlers: Reason: Initializing input monitor due to: TISBinder#onInitialize()
+09-15 21:08:49.540 D/CompatibilityChangeReporter(  543): Compat change id reported: 135634846; UID 1000; state: DISABLED
+09-15 21:08:49.614 W/ActivityManager(  543): Slow operation: 103ms so far, now at startProcess: done starting proc!
+09-15 21:08:49.658 W/ActivityManager(  543): Slow operation: 108ms so far, now at startProcess: asking zygote to start proc
+09-15 21:08:49.765 D/b/267448330( 1250): provider: ComponentInfo{com.android.quicksearchbox/com.android.quicksearchbox.SearchWidgetProvider}, paddedSizes: [292.0x105.0, 508.0x58.0, 460.0x58.0], getMinMaxSizes: Rect(292, 58 - 508, 105)
+09-15 21:08:49.948 D/EGL_emulation( 2234): app_time_stats: avg=48.08ms min=21.41ms max=95.47ms count=16
+09-15 21:08:50.074 W/ProcessCpuTracker(  543): Failed to stat(/proc/2446): android.system.ErrnoException: stat failed: ENOENT (No such file or directory)
+09-15 21:08:50.074 W/ProcessCpuTracker(  543): Skipping unknown process pid 2446
+09-15 21:08:50.100 I/RoleService(  543): Granting default roles...
+09-15 21:08:50.137 D/StylusManager(  949): Stylus InputDevice changed: 14 virtio_input_multi_touch_11
+09-15 21:08:50.150 E/RoleControllerManager(  543): Error calling grantDefaultRoles()
+09-15 21:08:50.150 E/RoleControllerManager(  543): java.util.concurrent.TimeoutException
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.permission.jarjar.com.android.internal.infra.AndroidFuture.triggerTimeout(AndroidFuture.java:289)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.permission.jarjar.com.android.internal.infra.AndroidFuture$$ExternalSyntheticLambda1.run(Unknown Source:2)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.os.Handler.handleCallback(Handler.java:958)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.os.Handler.dispatchMessage(Handler.java:99)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.os.Looper.loopOnce(Looper.java:205)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at android.os.Looper.loop(Looper.java:294)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at com.android.server.SystemServer.run(SystemServer.java:970)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at com.android.server.SystemServer.main(SystemServer.java:664)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at java.lang.reflect.Method.invoke(Native Method)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+09-15 21:08:50.150 E/RoleControllerManager(  543): 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:949)
+09-15 21:08:50.177 W/Looper  (  949): Drained
+09-15 21:08:50.182 D/StylusManager(  949): Stylus InputDevice changed: 13 virtio_input_multi_touch_10
+09-15 21:08:50.199 D/StylusManager(  949): Stylus InputDevice changed: 12 virtio_input_multi_touch_9
+09-15 21:08:50.383 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:559) waiters=1 in void com.android.server.am.ContentProviderHelper.publishContentProviders(android.app.IApplicationThread, java.util.List) for 2.184s
+09-15 21:08:50.409 I/ActivityManager(  543): Flag disabled. Ignoring finishAttachApplication from uid: 10095. pid: 2419
+09-15 21:08:50.559 D/DeferredSmsMmsRestoreService( 2318): startIfFilesExist: no files to restore
+09-15 21:08:50.560 D/DeferredSmsMmsRestoreService( 2318): addAllSharedPrefToLocalLog
+09-15 21:08:50.570 D/StylusManager(  949): Stylus InputDevice changed: 11 virtio_input_multi_touch_8
+09-15 21:08:50.575 D/ActivityManager(  543): sync unfroze 1789 com.android.messaging for 3
+09-15 21:08:50.588 D/OomAdjuster(  543): Not killing cached processes
+09-15 21:08:50.598 W/system_server(  543): Long monitor contention with owner ActivityManager (580) at void com.android.server.am.BroadcastQueueModernImpl.checkPendingColdStartValidity()(BroadcastQueueModernImpl.java:559) waiters=4 in int com.android.server.am.ActivityManagerService.bindServiceInstance(android.app.IApplicationThread, android.os.IBinder, android.content.Intent, java.lang.String, android.app.IServiceConnection, long, java.lang.String, boolean, int, java.lang.String, android.app.IApplicationThread, java.lang.String, int) for 1.944s
+09-15 21:08:50.603 I/InputReader(  543): Reconfiguring input devices, changes=KEYBOARD_LAYOUTS
+09-15 21:08:50.675 D/Zygote  (  330): Forked child process 2469
+09-15 21:08:50.813 W/ActivityManager(  543): Slow operation: 1301ms so far, now at startProcess: returned from zygote!
+09-15 21:08:50.927 D/ActivityManager(  543): freezing 2282 com.android.traceur
+09-15 21:08:50.964 W/Looper  (  543): Slow dispatch took 2311ms main h=android.os.Handler c=<recycled PooledLambda@d4f850b> m=1
+09-15 21:08:50.977 D/EGL_emulation( 2234): app_time_stats: avg=63.71ms min=19.29ms max=159.86ms count=15
