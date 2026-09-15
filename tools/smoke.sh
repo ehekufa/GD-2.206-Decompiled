@@ -108,16 +108,19 @@ note "stage=pid pid=${PID:-DEAD}"
 
 post_report
 
-# 4 плотные аннотации: одна аннотация = до 15 строк отчёта (не режутся лимитом)
+# 4 плотные аннотации: одна аннотация = до 15 строк отчёта (не режутся лимитом).
+# Уровень передаётся первым аргументом: при падении error (красная), при успехе notice,
+# иначе зелёный билд показывал «1 error» и вводил в заблуждение.
 chunk() {
-  sed -n "$1,$2p" smoke.txt | sed 's/$/%0A/' | tr -d '\n' | sed "s|^|::error::SMOKE REPORT $3%0A|"
+  local lvl="$1"; shift
+  sed -n "$1,$2p" smoke.txt | sed 's/$/%0A/' | tr -d '\n' | sed "s|^|::${lvl}::SMOKE REPORT $3%0A|"
   echo
 }
 if [ -z "$PID" ]; then
-  chunk 1 15 "1/4"; chunk 16 30 "2/4"; chunk 31 45 "3/4"; chunk 46 60 "4/4"
+  chunk error 1 15 "1/4"; chunk error 16 30 "2/4"; chunk error 31 45 "3/4"; chunk error 46 60 "4/4"
   exit 1
 fi
-chunk 1 12 "OK"
+chunk notice 1 12 "OK"
 note "stage=done, game is alive"
 adb shell am force-stop "$PKG" || true
 note "stage=done, game is alive"
