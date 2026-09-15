@@ -34,10 +34,20 @@ jobs:
       - name: Host tests (gcc) - ядро, редактор, аккаунты, экраны оболочки
         run: bash tools/hostcheck.sh
 
-      - uses: android-actions/setup-android@v4
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-35" "build-tools;34.0.0"
+      - name: Install Android SDK packages (SDK уже в образе раннера)
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SM=""
+          for c in "$SDK/cmdline-tools/latest/bin/sdkmanager" "$SDK"/cmdline-tools/*/bin/sdkmanager "$(command -v sdkmanager || true)"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then SM="$c"; break; fi
+          done
+          if [ -z "$SM" ]; then echo "::error::sdkmanager не найден в $SDK"; exit 1; fi
+          echo "ANDROID_HOME=$SDK"
+          echo "sdkmanager=$SM"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          "$SM" "platforms;android-35" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
