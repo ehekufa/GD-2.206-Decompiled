@@ -31,7 +31,7 @@ jobs:
           grep -q 'android_main'                game/game.c
           ! grep -rq 'com\.cb4\|dimscript'      game/
 
-      - name: Host tests (gcc): ядро, редактор, аккаунты, экраны оболочки
+      - name: Host tests (gcc) - ядро, редактор, аккаунты, экраны оболочки
         run: bash tools/hostcheck.sh
 
       - uses: android-actions/setup-android@v4
