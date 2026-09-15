@@ -31,11 +31,8 @@ jobs:
           grep -q 'android_main'                game/game.c
           ! grep -rq 'com\.cb4\|dimscript'      game/
 
-      - name: Headless level test (host gcc)
-        run: |
-          gcc -std=c99 -O2 -Wall -DGD_SIM game/gd_core.c -o /tmp/gdsim -lm
-          /tmp/gdsim 0        # автопилот обязан пройти уровень
-          /tmp/gdsim -0.6     # и с опозданием прыжка на 0.6 блока
+      - name: Host tests (gcc): ядро, редактор, аккаунты, экраны оболочки
+        run: bash tools/hostcheck.sh
 
       - uses: android-actions/setup-android@v4
 
